@@ -1,0 +1,41 @@
+# Core Bot Framework
+aiogram==3.13.1
+aiohttp==3.10.10
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Redis
+redis==5.2.0
+
+# Configuration
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# Rate Limiting
+aiolimiter==1.1.0
+
+# Utilities
+pytz==2024.2
+python-dateutil==2.9.0
+
+# Google Sheets (Optional)
+gspread==6.1.4
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+
+# Logging (Optional)
+sentry-sdk==2.19.2
+
+# Development & Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# Code Quality
+ruff==0.8.5
+mypy==1.14.0

@@ -1,0 +1,20 @@
+{
+  "timezone": "Europe/Moscow",
+  "join_url": "https://t.me/your_bot?start=join",
+  "rate_limits": {
+    "broadcast_rps": 20,
+    "announce_rps": 20,
+    "burst": 5,
+    "max_retries": 5
+  },
+  "admin_panel": {
+    "items_per_page": 10
+  },
+  "sheets_sync": {
+    "enabled": false,
+    "flush_sec": 1.0,
+    "max_updates": 200,
+    "max_appends": 200,
+    "max_deletes": 200
+  }
+}
