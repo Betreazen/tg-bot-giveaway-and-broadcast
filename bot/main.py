@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 from bot.config.settings import init_settings
 from bot.db.base import close_db, init_db
 from bot.messages.i18n import init_messages
+from bot.services.redis_client import init_redis
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +36,7 @@ async def main() -> None:
         # Initialize Redis storage for FSM
         logger.info(f"Connecting to Redis: {settings.redis_url}")
         redis = Redis.from_url(settings.redis_url, decode_responses=True)
+        init_redis(redis)
         storage = RedisStorage(redis=redis)
 
         # Initialize bot and dispatcher
@@ -52,6 +54,7 @@ async def main() -> None:
         # Register handlers
         logger.info("Registering handlers...")
         from bot.handlers import start
+        from bot.handlers import verification
         from bot.handlers.admin import announce, broadcast_wizard, entry, giveaway_wizard, menu, winners
         
         # Порядок важен! Сначала специфичные, потом общие
@@ -61,6 +64,7 @@ async def main() -> None:
         dp.include_router(broadcast_wizard.router)
         dp.include_router(menu.router)
         dp.include_router(entry.router)
+        dp.include_router(verification.router)
         dp.include_router(start.router)
         
         logger.info("✅ Registered user handler: /start")

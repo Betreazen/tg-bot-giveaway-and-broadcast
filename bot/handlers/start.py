@@ -1,15 +1,27 @@
 """User /start command handler."""
 
 import logging
+import time
 
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.config.settings import get_settings
 from bot.db.base import get_session
 from bot.db.repo import giveaway_repo, participant_repo, user_repo
+from bot.handlers.admin.states import VerificationStates
+from bot.handlers.verification import (
+    VERIFICATION_TIMEOUT,
+    generate_verification_keyboard,
+    generate_verification_numbers,
+    get_blocked_key,
+    get_attempts_key,
+    MAX_ATTEMPTS,
+)
 from bot.messages.i18n import t
+from bot.services.redis_client import get_redis
 from bot.services.subscription import check_subscription
 
 logger = logging.getLogger(__name__)
@@ -18,7 +30,7 @@ router = Router()
 
 
 @router.message(Command("start"))
-async def start_handler(message: Message) -> None:
+async def start_handler(message: Message, state: FSMContext) -> None:
     """
     Handle /start command for user participation.
 
@@ -27,7 +39,8 @@ async def start_handler(message: Message) -> None:
     2. Check channel subscription
     3. Get active giveaway
     4. Check if already participating
-    5. Add participant or send appropriate message
+    5. Admin bypass or verification step
+    6. Add participant (after verification)
     """
     if not message.from_user:
         return
@@ -70,34 +83,89 @@ async def start_handler(message: Message) -> None:
                 logger.info(f"User {user_id} is already participating in giveaway {giveaway.id}")
                 return
 
-            # Add participant
-            participant = await participant_repo.add_participant(
-                session=session,
+            # Admin bypass — skip verification
+            if settings.is_admin(user_id):
+                participant = await participant_repo.add_participant(
+                    session=session,
+                    giveaway_id=giveaway.id,
+                    user_id=user_id,
+                    username_snapshot=username,
+                    giveaway_end_snapshot=giveaway.end_at,
+                )
+                logger.info(f"Admin {user_id} joined giveaway {giveaway.id} (verification skipped)")
+
+                from datetime import datetime
+                import pytz
+
+                moscow_tz = pytz.timezone("Europe/Moscow")
+                end_at_moscow = giveaway.end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
+                end_at_str = end_at_moscow.strftime("%Y-%m-%d %H:%M")
+
+                await message.answer(
+                    t(
+                        "user.participation_confirmed",
+                        description=giveaway.description,
+                        end_at=end_at_str,
+                        num_winners=giveaway.num_winners,
+                    )
+                )
+                return
+
+            # Check if user is blocked for this giveaway
+            redis = get_redis()
+            blocked_key = get_blocked_key(giveaway.id, user_id)
+            is_blocked = await redis.get(blocked_key)
+
+            if is_blocked:
+                await message.answer(t("user.verification_blocked"))
+                logger.info(f"User {user_id} is blocked from giveaway {giveaway.id}")
+                return
+
+            # Check if already in verification state
+            current_state = await state.get_state()
+            if current_state == VerificationStates.waiting_for_button:
+                data = await state.get_data()
+                created_at = data.get("created_at", 0)
+
+                if time.time() - created_at <= VERIFICATION_TIMEOUT:
+                    # Active verification — remind user
+                    await message.answer(t("user.verification_in_progress"))
+                    return
+                else:
+                    # Expired — clear state and start fresh
+                    await state.clear()
+
+            # Check total attempts (might be blocked but key wasn't set due to edge case)
+            attempts_key = get_attempts_key(giveaway.id, user_id)
+            attempts_str = await redis.get(attempts_key)
+            if attempts_str and int(attempts_str) >= MAX_ATTEMPTS:
+                await redis.set(blocked_key, "1", ex=30 * 24 * 3600)
+                await message.answer(t("user.verification_blocked"))
+                return
+
+            # Start verification
+            correct_number, numbers = generate_verification_numbers()
+
+            await state.set_state(VerificationStates.waiting_for_button)
+            await state.update_data(
+                correct_number=correct_number,
+                numbers=numbers,
+                created_at=time.time(),
                 giveaway_id=giveaway.id,
                 user_id=user_id,
-                username_snapshot=username,
-                giveaway_end_snapshot=giveaway.end_at,
+                username=username,
+                giveaway_end_at=giveaway.end_at.isoformat(),
+                giveaway_description=giveaway.description,
+                giveaway_num_winners=giveaway.num_winners,
             )
 
-            logger.info(f"User {user_id} joined giveaway {giveaway.id}")
-
-            # Send confirmation
-            # Format end_at to Europe/Moscow timezone for display
-            from datetime import datetime
-            import pytz
-
-            moscow_tz = pytz.timezone("Europe/Moscow")
-            end_at_moscow = giveaway.end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
-            end_at_str = end_at_moscow.strftime("%Y-%m-%d %H:%M")
-
+            keyboard = generate_verification_keyboard(numbers)
             await message.answer(
-                t(
-                    "user.participation_confirmed",
-                    description=giveaway.description,
-                    end_at=end_at_str,
-                    num_winners=giveaway.num_winners,
-                )
+                t("user.verification_prompt", number=correct_number),
+                reply_markup=keyboard,
             )
+
+            logger.info(f"Verification started for user {user_id}, giveaway {giveaway.id}")
 
     except Exception as e:
         logger.error(f"Error in start handler for user {user_id}: {e}", exc_info=True)

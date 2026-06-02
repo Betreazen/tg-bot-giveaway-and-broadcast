@@ -40,3 +40,9 @@ class WinnersStates(StatesGroup):
     confirm_end = State()
     select_winners = State()
     select_publish_target = State()
+
+
+class VerificationStates(StatesGroup):
+    """Состояния верификации пользователя при регистрации в розыгрыше."""
+
+    waiting_for_button = State()

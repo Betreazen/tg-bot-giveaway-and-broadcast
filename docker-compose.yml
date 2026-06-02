@@ -49,7 +49,7 @@ services:
       - ./logs:/app/logs
       - ./bot:/app/bot
       # Раскомментируйте если используете Google Sheets
-      # - ./service_account.json:/app/service_account.json:ro
+      - ./service_account.json:/app/service_account.json:ro
     restart: unless-stopped
 
 volumes:
