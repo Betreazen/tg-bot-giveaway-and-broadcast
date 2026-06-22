@@ -1,6 +1,7 @@
 """User repository for CRUD operations."""
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
@@ -25,6 +26,11 @@ async def create_or_update_user(session: AsyncSession, user_id: int, username: s
     """
     Create new user or update existing user's username.
 
+    Uses an atomic PostgreSQL upsert (INSERT ... ON CONFLICT) so that several
+    concurrent /start updates from the same new user cannot race into a
+    duplicate-key error. The username is only overwritten when a new (non-null)
+    value is provided; otherwise the stored one is kept.
+
     Args:
         session: Database session
         user_id: Telegram user ID
@@ -33,17 +39,16 @@ async def create_or_update_user(session: AsyncSession, user_id: int, username: s
     Returns:
         User object
     """
+    stmt = pg_insert(User).values(user_id=user_id, username=username)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id"],
+        set_={"username": func.coalesce(stmt.excluded.username, User.username)},
+    )
+    await session.execute(stmt)
+    await session.flush()
+
     user = await get_user(session, user_id)
-    if user:
-        # Update username if changed
-        if username and user.username != username:
-            user.username = username
-            await session.flush()
-    else:
-        # Create new user
-        user = User(user_id=user_id, username=username)
-        session.add(user)
-        await session.flush()
+    assert user is not None  # just upserted
     return user
 
 

@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Participant
@@ -26,16 +27,25 @@ async def add_participant(
         giveaway_end_snapshot: Giveaway end time snapshot
 
     Returns:
-        Created Participant object
+        The Participant object (existing one if already joined). Idempotent: a
+        concurrent or repeated join does not raise a duplicate-key error thanks
+        to ON CONFLICT DO NOTHING on the (giveaway_id, user_id) unique index.
     """
-    participant = Participant(
-        giveaway_id=giveaway_id,
-        user_id=user_id,
-        username_snapshot=username_snapshot,
-        giveaway_end_snapshot=giveaway_end_snapshot,
+    stmt = (
+        pg_insert(Participant)
+        .values(
+            giveaway_id=giveaway_id,
+            user_id=user_id,
+            username_snapshot=username_snapshot,
+            giveaway_end_snapshot=giveaway_end_snapshot,
+        )
+        .on_conflict_do_nothing(index_elements=["giveaway_id", "user_id"])
     )
-    session.add(participant)
+    await session.execute(stmt)
     await session.flush()
+
+    participant = await get_participant(session, giveaway_id, user_id)
+    assert participant is not None  # just inserted or already existed
     return participant
 
 
