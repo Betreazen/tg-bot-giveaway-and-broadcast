@@ -18,7 +18,7 @@ class MessageLoader:
 
     def load_messages(self) -> None:
         """Load messages from JSON file."""
-        with open(self.messages_path, "r", encoding="utf-8") as f:
+        with open(self.messages_path, encoding="utf-8") as f:
             self.messages = json.load(f)
 
     def get(self, key: str, **kwargs: Any) -> str:

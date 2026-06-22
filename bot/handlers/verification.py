@@ -13,6 +13,7 @@ from bot.db.repo import participant_repo
 from bot.handlers.admin.states import VerificationStates
 from bot.messages.i18n import t
 from bot.services.redis_client import get_redis
+from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -126,14 +127,12 @@ async def verification_callback(callback: CallbackQuery, state: FSMContext) -> N
         await state.clear()
 
         try:
+            from datetime import datetime
+
+            # Parse giveaway_end_at back to datetime
+            giveaway_end_dt = datetime.fromisoformat(giveaway_end_at)
+
             async with get_session() as session:
-                from datetime import datetime
-
-                import pytz
-
-                # Parse giveaway_end_at back to datetime
-                giveaway_end_dt = datetime.fromisoformat(giveaway_end_at)
-
                 await participant_repo.add_participant(
                     session=session,
                     giveaway_id=giveaway_id,
@@ -145,9 +144,7 @@ async def verification_callback(callback: CallbackQuery, state: FSMContext) -> N
             logger.info(f"User {user_id} passed verification for giveaway {giveaway_id}")
 
             # Format end time for display
-            moscow_tz = pytz.timezone("Europe/Moscow")
-            end_at_moscow = giveaway_end_dt.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
-            end_at_str = end_at_moscow.strftime("%Y-%m-%d %H:%M")
+            end_at_str = fmt_local(giveaway_end_dt, "%Y-%m-%d %H:%M")
 
             await callback.message.edit_text(
                 t(

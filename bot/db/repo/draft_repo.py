@@ -1,12 +1,13 @@
 """Admin draft repository for CRUD operations."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import AdminDraft
+from bot.utils.datetimes import now_utc
 
 
 async def create_draft(
@@ -73,7 +74,7 @@ async def update_draft(
             draft.payload = payload
         if status is not None:
             draft.status = status
-        draft.updated_at = datetime.utcnow()
+        draft.updated_at = now_utc()
         await session.flush()
 
     return draft
@@ -125,7 +126,7 @@ async def cleanup_old_drafts(session: AsyncSession, days: int = 7) -> int:
     Returns:
         Number of drafts deleted
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = now_utc() - timedelta(days=days)
     result = await session.execute(delete(AdminDraft).where(AdminDraft.updated_at < cutoff_date))
     await session.flush()
     return result.rowcount

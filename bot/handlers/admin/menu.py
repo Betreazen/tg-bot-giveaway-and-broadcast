@@ -9,6 +9,7 @@ from bot.config.settings import get_settings
 from bot.db.base import get_session
 from bot.db.repo import giveaway_repo, participant_repo
 from bot.messages.i18n import t
+from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,7 @@ async def show_status(callback: CallbackQuery) -> None:
         # Get participant count
         participant_count = await participant_repo.get_participant_count(session, giveaway.id)
 
-        # Format end time to Moscow timezone
-        import pytz
-
-        moscow_tz = pytz.timezone("Europe/Moscow")
-        end_at_moscow = giveaway.end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
-        end_at_str = end_at_moscow.strftime("%Y-%m-%d %H:%M")
+        end_at_str = fmt_local(giveaway.end_at, "%Y-%m-%d %H:%M")
 
         status_text = t(
             "admin.status_active",
@@ -73,19 +69,19 @@ async def sync_google_sheets(callback: CallbackQuery) -> None:
         return
 
     await callback.answer("Синхронизация начата...")
-    
+
     try:
         from bot.services.sheets_sync import sync_all_data
-        
+
         result = await sync_all_data()
-        
+
         if result:
             await callback.message.answer("✅ Синхронизация с Google Sheets успешно завершена!")
         else:
             await callback.message.answer("⚠️ Синхронизация не выполнена (возможно, отключена или нет credentials)")
-            
+
     except Exception as e:
         logger.error(f"Ошибка синхронизации: {e}", exc_info=True)
         await callback.message.answer("❌ Ошибка при синхронизации с Google Sheets")
-    
+
     logger.info(f"Admin {user_id} triggered Google Sheets sync")

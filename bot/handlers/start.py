@@ -3,7 +3,7 @@
 import logging
 import time
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -13,16 +13,17 @@ from bot.db.base import get_session
 from bot.db.repo import giveaway_repo, participant_repo, user_repo
 from bot.handlers.admin.states import VerificationStates
 from bot.handlers.verification import (
+    MAX_ATTEMPTS,
     VERIFICATION_TIMEOUT,
     generate_verification_keyboard,
     generate_verification_numbers,
-    get_blocked_key,
     get_attempts_key,
-    MAX_ATTEMPTS,
+    get_blocked_key,
 )
 from bot.messages.i18n import t
 from bot.services.redis_client import get_redis
 from bot.services.subscription import check_subscription
+from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ async def start_handler(message: Message, state: FSMContext) -> None:
 
             # Admin bypass — skip verification
             if settings.is_admin(user_id):
-                participant = await participant_repo.add_participant(
+                await participant_repo.add_participant(
                     session=session,
                     giveaway_id=giveaway.id,
                     user_id=user_id,
@@ -94,12 +95,7 @@ async def start_handler(message: Message, state: FSMContext) -> None:
                 )
                 logger.info(f"Admin {user_id} joined giveaway {giveaway.id} (verification skipped)")
 
-                from datetime import datetime
-                import pytz
-
-                moscow_tz = pytz.timezone("Europe/Moscow")
-                end_at_moscow = giveaway.end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
-                end_at_str = end_at_moscow.strftime("%Y-%m-%d %H:%M")
+                end_at_str = fmt_local(giveaway.end_at, "%Y-%m-%d %H:%M")
 
                 await message.answer(
                     t(

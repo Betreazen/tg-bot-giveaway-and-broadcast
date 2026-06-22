@@ -1,56 +1,64 @@
-# Docker Compose configuration for Telegram Giveaway Bot
+# Docker Compose for the Telegram Giveaway Bot.
+#
+# Isolation notes (so this stack never clashes with other bots on the server):
+#   * Container/volume/network names are prefixed by the Compose project name
+#     (COMPOSE_PROJECT_NAME in .env) — no fixed container_name that could collide.
+#   * Postgres and Redis are NOT published to the host by default; the bot reaches
+#     them over this project's private network. Uncomment the `ports` only if you
+#     really need host access, and pick a free host port via .env.
+#   * Each project gets its own default network, so a "postgres"/"redis" service
+#     in another stack stays completely separate.
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: giveaway_bot_postgres
     environment:
-      POSTGRES_USER: giveaway_user
-      POSTGRES_PASSWORD: giveaway_pass
-      POSTGRES_DB: giveaway_bot
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U giveaway_user"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    mem_limit: 256m
 
   redis:
     image: redis:7-alpine
-    container_name: giveaway_bot_redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "${REDIS_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
+    mem_limit: 128m
 
   bot:
     build: .
-    container_name: giveaway_bot
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+asyncpg://giveaway_user:giveaway_pass@postgres:5432/giveaway_bot
-      REDIS_URL: redis://redis:6379/0
     env_file:
       - .env
     volumes:
       - ./logs:/app/logs
-      - ./bot:/app/bot
-      # Раскомментируйте если используете Google Sheets
-      - ./service_account.json:/app/service_account.json:ro
+      # Mount the Google service account ONLY if you use Sheets sync
+      # (and set GOOGLE_CREDENTIALS_PATH=/app/service_account.json in .env):
+      # - ./service_account.json:/app/service_account.json:ro
     restart: unless-stopped
+    mem_limit: 256m
 
 volumes:
   postgres_data:

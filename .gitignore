@@ -38,10 +38,6 @@ env/
 .env.*
 !.env.example
 
-# Configuration files
-bot/config/config.json
-!bot/config/config.json.example
-
 # Secrets
 service_account.json
 google_credentials.json
@@ -58,9 +54,6 @@ logs/
 *.sqlite
 *.sqlite3
 
-# Alembic
-alembic.ini
-
 # Testing
 .pytest_cache/
 .coverage
@@ -72,7 +65,3 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
-
-# Project specific
-bot/db/migrations/versions/*.py
-!bot/db/migrations/versions/__init__.py

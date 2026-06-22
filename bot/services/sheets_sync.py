@@ -4,9 +4,16 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import pytz
+from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
+
+
+def _fmt_dt(value: Any) -> str:
+    """Format a datetime value in the configured local timezone for a sheet cell."""
+    if isinstance(value, datetime):
+        return fmt_local(value, "%Y-%m-%d %H:%M")
+    return str(value) if value else ""
 
 # Флаг доступности Google Sheets
 SHEETS_AVAILABLE = False
@@ -67,16 +74,15 @@ class SheetsSync:
             sheet.append_row(headers)
 
             # Данные
-            moscow_tz = pytz.timezone("Europe/Moscow")
             rows = []
             for user in users:
-                joined_at = user.get("joined_at")
-                if joined_at and isinstance(joined_at, datetime):
-                    joined_at_msk = joined_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    joined_at_msk = str(joined_at) if joined_at else ""
-
-                rows.append([user.get("user_id", ""), user.get("username", ""), joined_at_msk])
+                rows.append(
+                    [
+                        user.get("user_id", ""),
+                        user.get("username", ""),
+                        _fmt_dt(user.get("joined_at")),
+                    ]
+                )
 
             if rows:
                 sheet.append_rows(rows)
@@ -110,37 +116,16 @@ class SheetsSync:
             ]
             sheet.append_row(headers)
 
-            moscow_tz = pytz.timezone("Europe/Moscow")
             rows = []
             for p in participants:
-                joined_at = p.get("joined_at")
-                if joined_at and isinstance(joined_at, datetime):
-                    joined_at_msk = joined_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    joined_at_msk = str(joined_at) if joined_at else ""
-
-                # Даты розыгрыша
-                giveaway_start = p.get("giveaway_start")
-                giveaway_end = p.get("giveaway_end")
-
-                if giveaway_start and isinstance(giveaway_start, datetime):
-                    start_msk = giveaway_start.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    start_msk = str(giveaway_start) if giveaway_start else ""
-
-                if giveaway_end and isinstance(giveaway_end, datetime):
-                    end_msk = giveaway_end.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    end_msk = str(giveaway_end) if giveaway_end else ""
-
                 rows.append(
                     [
                         p.get("giveaway_id", ""),
                         p.get("user_id", ""),
                         p.get("username_snapshot", ""),
-                        joined_at_msk,
-                        start_msk,
-                        end_msk,
+                        _fmt_dt(p.get("joined_at")),
+                        _fmt_dt(p.get("giveaway_start")),
+                        _fmt_dt(p.get("giveaway_end")),
                     ]
                 )
 
@@ -169,23 +154,14 @@ class SheetsSync:
             headers = ["Giveaway ID", "User ID", "Username", "Selected At (MSK)"]
             sheet.append_row(headers)
 
-            moscow_tz = pytz.timezone("Europe/Moscow")
             rows = []
             for w in winners:
-                created_at = w.get("created_at")
-                if created_at and isinstance(created_at, datetime):
-                    created_at_msk = created_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime(
-                        "%Y-%m-%d %H:%M"
-                    )
-                else:
-                    created_at_msk = str(created_at) if created_at else ""
-
                 rows.append(
                     [
                         w.get("giveaway_id", ""),
                         w.get("user_id", ""),
                         w.get("username_snapshot", ""),
-                        created_at_msk,
+                        _fmt_dt(w.get("created_at")),
                     ]
                 )
 
@@ -202,7 +178,7 @@ class SheetsSync:
     def sync_giveaways_summary(self, giveaways_data: list[dict[str, Any]]) -> bool:
         """
         Синхронизация сводной таблицы по розыгрышам.
-        
+
         Статистика по каждому розыгрышу:
         - ID розыгрыша
         - Описание
@@ -237,33 +213,20 @@ class SheetsSync:
             ]
             sheet.append_row(headers)
 
-            moscow_tz = pytz.timezone("Europe/Moscow")
             rows = []
-            
+
             for g in giveaways_data:
                 # Форматирование дат
                 start_at = g.get("start_at")
                 end_at = g.get("end_at")
-                created_at = g.get("created_at")
 
-                if start_at and isinstance(start_at, datetime):
-                    start_msk = start_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    start_msk = str(start_at) if start_at else ""
-
-                if end_at and isinstance(end_at, datetime):
-                    end_msk = end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    end_msk = str(end_at) if end_at else ""
-
-                if created_at and isinstance(created_at, datetime):
-                    created_msk = created_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz).strftime("%Y-%m-%d %H:%M")
-                else:
-                    created_msk = str(created_at) if created_at else ""
+                start_msk = _fmt_dt(start_at)
+                end_msk = _fmt_dt(end_at)
+                created_msk = _fmt_dt(g.get("created_at"))
 
                 # Длительность
-                if start_at and end_at and isinstance(start_at, datetime) and isinstance(end_at, datetime):
-                    duration = (end_at - start_at).days
+                if isinstance(start_at, datetime) and isinstance(end_at, datetime):
+                    duration: int | str = (end_at - start_at).days
                 else:
                     duration = ""
 
@@ -306,13 +269,13 @@ async def sync_all_data() -> bool:
     """Полная синхронизация всех данных."""
     from bot.config.settings import get_settings
     from bot.db.base import get_session
-    from bot.db.repo import participant_repo, user_repo, winner_repo
+    from bot.db.repo import user_repo
 
     settings = get_settings()
 
     # Проверяем настройки
-    if not settings.app_config or not settings.app_config.sheets_sync.enabled:
-        logger.info("Google Sheets синхронизация отключена в конфиге")
+    if not settings.sheets_sync_enabled:
+        logger.info("Google Sheets синхронизация отключена (SHEETS_SYNC_ENABLED=false)")
         return False
 
     if not settings.google_credentials_path or not settings.spreadsheet_id:
@@ -324,9 +287,11 @@ async def sync_all_data() -> bool:
         return False
 
     try:
-        # Инициализация
+        # gspread синхронный — выносим в поток, чтобы не блокировать event loop бота.
+        import asyncio
+
         sync = SheetsSync(settings.google_credentials_path, settings.spreadsheet_id)
-        if not sync.connect():
+        if not await asyncio.to_thread(sync.connect):
             return False
 
         # Получаем данные из БД
@@ -373,29 +338,39 @@ async def sync_all_data() -> bool:
             ]
 
             # Розыгрыши со статистикой
+            from bot.db.models import User
+
             result = await session.execute(select(Giveaway))
             giveaways = result.scalars().all()
-            
+
+            # Счётчики участников/победителей одним запросом каждый (без N+1).
+            part_counts = dict(
+                (
+                    await session.execute(
+                        select(Participant.giveaway_id, func.count()).group_by(Participant.giveaway_id)
+                    )
+                ).all()
+            )
+            win_counts = dict(
+                (
+                    await session.execute(
+                        select(Winner.giveaway_id, func.count()).group_by(Winner.giveaway_id)
+                    )
+                ).all()
+            )
+
             giveaways_data = []
             for g in giveaways:
-                # Подсчет участников
-                participants_count = await session.scalar(
-                    select(func.count()).select_from(Participant).where(Participant.giveaway_id == g.id)
-                )
-                
-                # Подсчет победителей
-                winners_count = await session.scalar(
-                    select(func.count()).select_from(Winner).where(Winner.giveaway_id == g.id)
-                )
-                
-                # Подсчет новых пользователей (присоединившихся во время розыгрыша)
-                from bot.db.models import User
+                # Новые пользователи в окне розыгрыша зависят от диапазона дат — отдельный запрос.
                 new_users_count = await session.scalar(
                     select(func.count()).select_from(User)
                     .where(User.joined_at >= g.start_at)
                     .where(User.joined_at <= g.end_at)
                 )
-                
+
+                participants_count = part_counts.get(g.id, 0)
+                winners_count = win_counts.get(g.id, 0)
+
                 giveaways_data.append({
                     "id": g.id,
                     "description": g.description,
@@ -409,11 +384,11 @@ async def sync_all_data() -> bool:
                     "new_users_count": new_users_count or 0,
                 })
 
-        # Синхронизация
-        sync.sync_users(users_data)
-        sync.sync_participants(participants_data)
-        sync.sync_winners(winners_data)
-        sync.sync_giveaways_summary(giveaways_data)
+        # Синхронизация (блокирующие вызовы gspread — в отдельном потоке)
+        await asyncio.to_thread(sync.sync_users, users_data)
+        await asyncio.to_thread(sync.sync_participants, participants_data)
+        await asyncio.to_thread(sync.sync_winners, winners_data)
+        await asyncio.to_thread(sync.sync_giveaways_summary, giveaways_data)
 
         logger.info("Полная синхронизация с Google Sheets завершена")
         return True

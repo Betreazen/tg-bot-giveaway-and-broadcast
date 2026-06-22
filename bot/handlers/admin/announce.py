@@ -2,7 +2,6 @@
 
 import logging
 
-import pytz
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -12,6 +11,7 @@ from bot.db.repo import giveaway_repo, user_repo
 from bot.keyboards.admin import get_manual_announce_keyboard
 from bot.messages.i18n import t
 from bot.services.mailing import MessageContent, send_mass_message, send_to_channel
+from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,7 @@ async def announce_giveaway(callback: CallbackQuery) -> None:
                 return
 
             # Показываем выбор куда отправить
-            moscow_tz = pytz.timezone("Europe/Moscow")
-            end_at_moscow = giveaway.end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
-            end_at_str = end_at_moscow.strftime("%d.%m.%Y %H:%M")
+            end_at_str = fmt_local(giveaway.end_at)
 
             text = (
                 f"📣 <b>Анонсирование розыгрыша</b>\n\n"
@@ -85,9 +83,7 @@ async def handle_manual_announce(callback: CallbackQuery) -> None:
                 return
 
             # Форматируем дату окончания
-            moscow_tz = pytz.timezone("Europe/Moscow")
-            end_at_moscow = giveaway.end_at.replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
-            end_at_str = end_at_moscow.strftime("%d.%m.%Y %H:%M")
+            end_at_str = fmt_local(giveaway.end_at)
 
             # Создаем кнопку участия
             join_button = InlineKeyboardMarkup(
@@ -95,7 +91,7 @@ async def handle_manual_announce(callback: CallbackQuery) -> None:
                     [
                         InlineKeyboardButton(
                             text="🎁 Участвовать",
-                            url=settings.app_config.join_url if settings.app_config else "https://t.me/your_bot",
+                            url=settings.join_url,
                         )
                     ]
                 ]
@@ -124,11 +120,16 @@ async def handle_manual_announce(callback: CallbackQuery) -> None:
                 if success:
                     sent_count += 1
 
+            user_ids: list[int] = []
             if target in ["users", "everywhere"]:
-                # Отправка всем пользователям
                 user_ids = await user_repo.get_all_user_ids(session)
-                result = await send_mass_message(callback.message.bot, user_ids, content, rps=20)
-                sent_count += result.sent_count
+
+        # Рассылка выполняется вне сессии БД, чтобы не держать соединение из пула.
+        if user_ids:
+            result = await send_mass_message(
+                callback.message.bot, user_ids, content, rps=settings.announce_rps
+            )
+            sent_count += result.sent_count
 
         await callback.message.edit_text(f"✅ Анонс отправлен!\n\n" f"📊 Отправлено: {sent_count}")
 

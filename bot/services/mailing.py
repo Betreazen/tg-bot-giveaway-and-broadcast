@@ -4,13 +4,10 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramRetryAfter
-from aiogram.types import FSInputFile, InlineKeyboardMarkup
-
-from bot.config.settings import get_settings
+from aiogram.types import InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 

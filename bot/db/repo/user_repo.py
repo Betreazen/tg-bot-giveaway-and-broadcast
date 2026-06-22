@@ -1,6 +1,6 @@
 """User repository for CRUD operations."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
@@ -85,5 +85,5 @@ async def get_user_count(session: AsyncSession) -> int:
     Returns:
         Total user count
     """
-    result = await session.execute(select(User))
-    return len(result.scalars().all())
+    result = await session.execute(select(func.count()).select_from(User))
+    return result.scalar_one()

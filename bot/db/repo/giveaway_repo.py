@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Giveaway
+from bot.utils.datetimes import now_utc
 
 
 async def create_giveaway(
@@ -77,7 +78,7 @@ async def get_active_giveaway(session: AsyncSession) -> Giveaway | None:
     Returns:
         Active Giveaway object if exists, None otherwise
     """
-    result = await session.execute(select(Giveaway).where(Giveaway.is_active == True).limit(1))
+    result = await session.execute(select(Giveaway).where(Giveaway.is_active.is_(True)).limit(1))
     return result.scalar_one_or_none()
 
 
@@ -88,7 +89,7 @@ async def deactivate_all_giveaways(session: AsyncSession) -> None:
     Args:
         session: Database session
     """
-    await session.execute(update(Giveaway).where(Giveaway.is_active == True).values(is_active=False))
+    await session.execute(update(Giveaway).where(Giveaway.is_active.is_(True)).values(is_active=False))
     await session.flush()
 
 
@@ -105,7 +106,7 @@ async def end_giveaway(session: AsyncSession, giveaway_id: int) -> Giveaway | No
     """
     giveaway = await get_giveaway(session, giveaway_id)
     if giveaway:
-        giveaway.ended_at = datetime.utcnow()
+        giveaway.ended_at = now_utc()
         giveaway.is_active = False
         await session.flush()
     return giveaway

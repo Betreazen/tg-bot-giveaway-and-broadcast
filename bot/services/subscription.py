@@ -1,7 +1,6 @@
 """Subscription verification service."""
 
 import logging
-from typing import Literal
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest

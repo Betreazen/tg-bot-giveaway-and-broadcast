@@ -6,6 +6,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from bot.config.settings import get_settings
 from bot.db.base import get_session
 from bot.db.repo import user_repo
 from bot.handlers.admin.states import BroadcastStates
@@ -141,35 +142,39 @@ async def confirm_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
     try:
+        # Получаем всех пользователей и сразу закрываем сессию БД,
+        # чтобы не держать соединение из пула во время длинной рассылки.
         async with get_session() as session:
-            # Получаем всех пользователей
             user_ids = await user_repo.get_all_user_ids(session)
 
-            if not user_ids:
-                await callback.message.edit_text("❌ В базе нет пользователей для рассылки")
-                await state.clear()
-                return
+        if not user_ids:
+            await callback.message.edit_text("❌ В базе нет пользователей для рассылки")
+            await state.clear()
+            return
 
-            # Создаем контент
-            content = MessageContent(
-                text=data.get("text"),
-                media_file_id=data.get("media_file_id"),
-                media_type=data.get("media_type"),
-            )
+        # Создаем контент
+        content = MessageContent(
+            text=data.get("text"),
+            media_file_id=data.get("media_file_id"),
+            media_type=data.get("media_type"),
+        )
 
-            # Отправляем рассылку
-            result = await send_mass_message(callback.message.bot, user_ids, content, rps=20)
+        # Отправляем рассылку
+        settings = get_settings()
+        result = await send_mass_message(
+            callback.message.bot, user_ids, content, rps=settings.broadcast_rps
+        )
 
-            # Показываем результат
-            result_text = (
-                f"✅ <b>Рассылка завершена!</b>\n\n"
-                f"📊 Всего пользователей: {result.total_recipients}\n"
-                f"✉️ Отправлено: {result.sent_count}\n"
-                f"❌ Не доставлено: {result.failed_count}\n"
-                f"⏱️ Длительность: {result.duration_seconds:.1f}с"
-            )
+        # Показываем результат
+        result_text = (
+            f"✅ <b>Рассылка завершена!</b>\n\n"
+            f"📊 Всего пользователей: {result.total_recipients}\n"
+            f"✉️ Отправлено: {result.sent_count}\n"
+            f"❌ Не доставлено: {result.failed_count}\n"
+            f"⏱️ Длительность: {result.duration_seconds:.1f}с"
+        )
 
-            await callback.message.edit_text(result_text)
+        await callback.message.edit_text(result_text)
 
     except Exception as e:
         logger.error(f"Ошибка рассылки: {e}", exc_info=True)

@@ -25,8 +25,8 @@ def get_engine() -> AsyncEngine:
             settings.database_url,
             echo=False,  # Set to True for SQL query logging
             pool_pre_ping=True,
-            pool_size=10,
-            max_overflow=20,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
         )
         logger.info("Database engine created")
     return _engine

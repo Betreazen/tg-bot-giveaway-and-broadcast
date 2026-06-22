@@ -1,9 +1,10 @@
 """Выбор дат для розыгрышей с inline кнопками."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
-import pytz
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from bot.utils.datetimes import get_tz, to_local
 
 
 def get_duration_keyboard() -> InlineKeyboardMarkup:
@@ -55,68 +56,58 @@ def get_start_time_keyboard() -> InlineKeyboardMarkup:
 def calculate_dates(start_option: str, duration_days: int) -> tuple[datetime, datetime]:
     """
     Рассчитать даты начала и окончания.
-    
+
     Args:
         start_option: Опция начала ("now", "1h", "3h", "6h", "tomorrow")
         duration_days: Длительность в днях
-        
+
     Returns:
         Tuple[start_at_utc, end_at_utc]
     """
-    moscow_tz = pytz.timezone("Europe/Moscow")
-    now_moscow = datetime.now(moscow_tz)
-    
+    tz = get_tz()
+    now_local = datetime.now(tz)
+
     # Определяем время начала
-    if start_option == "now":
-        start_at_moscow = now_moscow
-    elif start_option == "1h":
-        start_at_moscow = now_moscow + timedelta(hours=1)
+    if start_option == "1h":
+        start_at_local = now_local + timedelta(hours=1)
     elif start_option == "3h":
-        start_at_moscow = now_moscow + timedelta(hours=3)
+        start_at_local = now_local + timedelta(hours=3)
     elif start_option == "6h":
-        start_at_moscow = now_moscow + timedelta(hours=6)
+        start_at_local = now_local + timedelta(hours=6)
     elif start_option == "tomorrow":
-        tomorrow = now_moscow + timedelta(days=1)
-        start_at_moscow = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
-    else:
-        start_at_moscow = now_moscow
-    
+        tomorrow = now_local + timedelta(days=1)
+        start_at_local = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
+    else:  # "now" or unknown
+        start_at_local = now_local
+
     # Рассчитываем время окончания
-    end_at_moscow = start_at_moscow + timedelta(days=duration_days)
-    
+    end_at_local = start_at_local + timedelta(days=duration_days)
+
     # Конвертируем в UTC
-    start_at_utc = start_at_moscow.astimezone(pytz.UTC)
-    end_at_utc = end_at_moscow.astimezone(pytz.UTC)
-    
-    return start_at_utc, end_at_utc
+    return start_at_local.astimezone(UTC), end_at_local.astimezone(UTC)
 
 
 def format_dates_display(start_at_iso: str, end_at_iso: str) -> str:
     """
     Форматировать даты для отображения.
-    
+
     Args:
         start_at_iso: ISO строка даты начала
         end_at_iso: ISO строка даты окончания
-        
+
     Returns:
         Отформатированная строка
     """
     from dateutil import parser
-    
+
     start_at = parser.isoparse(start_at_iso)
     end_at = parser.isoparse(end_at_iso)
-    
-    moscow_tz = pytz.timezone("Europe/Moscow")
-    start_moscow = start_at.astimezone(moscow_tz)
-    end_moscow = end_at.astimezone(moscow_tz)
-    
-    start_str = start_moscow.strftime("%d.%m.%Y %H:%M")
-    end_str = end_moscow.strftime("%d.%m.%Y %H:%M")
-    
-    duration = end_at - start_at
-    days = duration.days
-    
+
+    start_str = to_local(start_at).strftime("%d.%m.%Y %H:%M")
+    end_str = to_local(end_at).strftime("%d.%m.%Y %H:%M")
+
+    days = (end_at - start_at).days
+
     return (
         f"🗓 Начало: {start_str} МСК\n"
         f"⏰ Окончание: {end_str} МСК\n"
