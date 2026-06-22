@@ -1,10 +1,12 @@
 # Быстрый старт (5 минут)
 
-Минимальные шаги для запуска бота на вашей машине.
+Минимальные шаги для запуска бота. Вся конфигурация — в одном файле `.env`.
+Схема БД создаётся автоматически при старте (Alembic-миграции), отдельных команд
+не требуется.
 
 ## ⚡ Перед началом
 
-Убедитесь что установлены:
+Установлены:
 - ✅ Docker
 - ✅ Docker Compose
 
@@ -13,93 +15,107 @@
 ### 1. Клонируйте репозиторий
 
 ```bash
-git clone https://github.com/your-username/tg-bot-giveaway-and-broadcast.git
+git clone https://github.com/Betreazen/tg-bot-giveaway-and-broadcast.git
 cd tg-bot-giveaway-and-broadcast
 ```
 
-### 2. Создайте .env файл
+### 2. Создайте и заполните `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Откройте `.env` и заполните **обязательные** параметры:
+Заполните **обязательные** параметры:
 
 ```env
+# Уникальное имя стека (чтобы не конфликтовать с другими ботами на сервере)
+COMPOSE_PROJECT_NAME=giveaway_bot
+
 BOT_TOKEN=ваш_токен_от_botfather
-ADMIN_IDS=ваш_telegram_id
+ADMIN_IDS=ваш_telegram_id            # можно несколько через запятую
 CHANNEL_ID=-100ваш_id_канала
+JOIN_URL=https://t.me/ваш_бот?start=join
+
+# Пароль БД — задайте свой и продублируйте его в DATABASE_URL
+POSTGRES_PASSWORD=придумайте_пароль
+DATABASE_URL=postgresql+asyncpg://giveaway_user:придумайте_пароль@postgres:5432/giveaway_bot
 ```
 
 **Как получить:**
-- `BOT_TOKEN`: Создайте бота у [@BotFather](https://t.me/BotFather)
-- `ADMIN_IDS`: Узнайте свой ID у [@userinfobot](https://t.me/userinfobot)
-- `CHANNEL_ID`: Добавьте [@userinfobot](https://t.me/userinfobot) в канал и перешлите сообщение
+- `BOT_TOKEN` — у [@BotFather](https://t.me/BotFather)
+- `ADMIN_IDS` — свой ID у [@userinfobot](https://t.me/userinfobot)
+- `CHANNEL_ID` — перешлите сообщение из канала [@userinfobot](https://t.me/userinfobot).
+  **Бот должен быть администратором канала** (для проверки подписки и анонсов).
 
-### 3. Создайте config.json
+> ⏰ Всё время в боте отображается по Москве (МСК, GMT+3) независимо от часового
+> пояса сервера — настраивать ничего не нужно.
 
-```bash
-cp bot/config/config.json.example bot/config/config.json
-```
-
-Откройте `bot/config/config.json` и измените:
-
-```json
-{
-  "join_url": "https://t.me/ваш_бот?start=join"
-}
-```
-
-Замените `ваш_бот` на username вашего бота.
-
-### 4. Запустите бота
+### 3. Запустите
 
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
 
-### 5. Проверьте работу
+Контейнер сам применит миграции (`alembic upgrade head`) и запустит бота.
+Postgres и Redis поднимутся рядом и **не торчат портами на хост** — конфликтов
+с другими ботами на сервере не будет.
+
+### 4. Проверьте логи
 
 ```bash
-# Посмотрите логи
-docker-compose logs -f bot
-
-# Ctrl+C для выхода
+docker compose logs -f bot
 ```
 
-В логах должно быть:
+Должно появиться:
 ```
-[INFO] Bot started
-[INFO] Polling started
+Running database migrations...
+Bot started successfully!
+Run polling for bot @ваш_бот
 ```
 
-### 6. Тестируйте!
+### 5. Тестируйте
 
-1. Откройте Telegram
-2. Найдите вашего бота
-3. Отправьте `/start`
-4. Отправьте `/admin` (только для администраторов)
+1. Напишите боту `/start`
+2. Напишите `/admin` (только для ID из `ADMIN_IDS`) — создание розыгрыша, анонс,
+   завершение, выбор победителей, рассылка.
 
-## 🎉 Готово!
+## 📊 Google Sheets (опционально)
 
-Бот запущен и работает! 
+Сам приватный ключ в `.env` не хранится — это отдельный файл, на который `.env`
+лишь указывает:
 
-Для подробной настройки смотрите [SETUP.md](SETUP.md).
+1. Положите `service_account.json` рядом с `docker-compose.yml`.
+2. В `.env`:
+   ```env
+   SHEETS_SYNC_ENABLED=true
+   GOOGLE_CREDENTIALS_PATH=/app/service_account.json
+   SPREADSHEET_ID=id_вашей_таблицы
+   ```
+3. В `docker-compose.yml` раскомментируйте строку монтирования:
+   ```yaml
+   - ./service_account.json:/app/service_account.json:ro
+   ```
+4. Дайте сервис-аккаунту (`client_email` из JSON) доступ **«Редактор»** к таблице.
+5. `docker compose up -d --build`
 
-## 🛑 Остановка
+Синхронизация запускается кнопкой в админ-панели.
+
+## 🛑 Управление
 
 ```bash
-docker-compose down
+docker compose down          # остановить (данные БД сохраняются)
+docker compose down -v       # остановить и удалить данные БД
+docker compose restart bot   # перезапустить только бота
+docker compose up -d --build # применить изменения кода/конфига
 ```
 
-## 🔄 Перезапуск
+## 🔄 Обновление сервера с существующей БД
 
-```bash
-docker-compose restart
-```
+Безопасный накат миграций без потери данных — см. [DEPLOY.md](DEPLOY.md)
+(не забудьте `pg_dump` перед обновлением).
 
 ## ❓ Проблемы?
 
-1. Проверьте логи: `docker-compose logs bot`
-2. Убедитесь что `.env` заполнен правильно
-3. Прочитайте [SETUP.md](SETUP.md) для подробностей
+1. Логи: `docker compose logs bot`
+2. Проверьте, что `.env` заполнен и пароль в `DATABASE_URL` совпадает с `POSTGRES_PASSWORD`
+3. Убедитесь, что бот — администратор канала
