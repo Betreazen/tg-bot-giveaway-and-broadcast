@@ -98,26 +98,19 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# Установка Docker
+# Установка Docker + плагина Compose v2
 sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 # Проверка установки
 docker --version
+docker compose version
 ```
 
-### Шаг 4: Установка Docker Compose
+### Шаг 4: (Compose устанавливается вместе с Docker)
 
-```bash
-# Скачивание Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-
-# Установка прав на выполнение
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Проверка
-docker-compose --version
-```
+Современный Docker включает плагин Compose v2 — команда `docker compose`
+(без дефиса). Отдельно ставить ничего не нужно.
 
 ### Шаг 5: Добавление пользователя в группу Docker (опционально)
 
@@ -140,7 +133,7 @@ mkdir -p ~/bots
 cd ~/bots
 
 # Клонирование репозитория
-git clone https://github.com/your-username/tg-bot-giveaway-and-broadcast.git
+git clone https://github.com/Betreazen/tg-bot-giveaway-and-broadcast.git
 cd tg-bot-giveaway-and-broadcast
 ```
 
@@ -153,92 +146,72 @@ cp .env.example .env
 nano .env
 ```
 
-Заполните файл своими данными:
+Заполните файл своими данными (вся конфигурация — здесь; отдельный `config.json`
+больше не используется):
 
 ```env
 # ===========================================
+# ИЗОЛЯЦИЯ (уникальное имя стека на сервере)
+# ===========================================
+COMPOSE_PROJECT_NAME=giveaway_bot
+
+# ===========================================
 # ОБЯЗАТЕЛЬНЫЕ ПАРАМЕТРЫ
 # ===========================================
-
-# Токен бота от @BotFather
 BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
-
-# ID администраторов (через запятую, без пробелов)
-ADMIN_IDS=123456789,987654321
-
-# ID канала (начинается с -100)
-CHANNEL_ID=-1001234567890
+ADMIN_IDS=123456789,987654321            # через запятую, без пробелов
+CHANNEL_ID=-1001234567890                # начинается с -100; бот — админ канала
+JOIN_URL=https://t.me/YOUR_BOT_USERNAME?start=join
 
 # ===========================================
-# БАЗА ДАННЫХ (можно не менять)
+# БАЗА ДАННЫХ (задайте свой пароль и продублируйте его в DATABASE_URL)
 # ===========================================
-DATABASE_URL=postgresql+asyncpg://giveaway_user:giveaway_pass@postgres:5432/giveaway_bot
+POSTGRES_USER=giveaway_user
+POSTGRES_PASSWORD=придумайте_сложный_пароль
+POSTGRES_DB=giveaway_bot
+DATABASE_URL=postgresql+asyncpg://giveaway_user:придумайте_сложный_пароль@postgres:5432/giveaway_bot
 
 # ===========================================
-# REDIS (можно не менять)
+# REDIS (можно не менять; префикс изолирует FSM-ключи)
 # ===========================================
 REDIS_URL=redis://redis:6379/0
+REDIS_FSM_PREFIX=giveaway_fsm
 
 # ===========================================
-# ЛОГИРОВАНИЕ
+# ПОВЕДЕНИЕ (лимиты рассылки в сообщениях/сек)
 # ===========================================
-LOG_LEVEL=INFO
+BROADCAST_RPS=20
+ANNOUNCE_RPS=20
+MAX_RETRIES=5
 
 # ===========================================
 # GOOGLE SHEETS (опционально)
 # ===========================================
+SHEETS_SYNC_ENABLED=false
 # GOOGLE_CREDENTIALS_PATH=/app/service_account.json
 # SPREADSHEET_ID=your_spreadsheet_id
 
 # ===========================================
-# SENTRY (опционально)
+# ЛОГИРОВАНИЕ / SENTRY (опционально)
 # ===========================================
+LOG_LEVEL=INFO
 # SENTRY_DSN=your_sentry_dsn
 ```
 
 Сохраните файл: `Ctrl+O`, `Enter`, `Ctrl+X`
 
-### Шаг 2: Создание config.json
+> ⏰ Время в боте всегда московское (МСК, GMT+3) независимо от часового пояса
+> сервера — настраивать не нужно.
 
-```bash
-cp bot/config/config.json.example bot/config/config.json
-nano bot/config/config.json
-```
+> 🗄 Схема БД создаётся/обновляется автоматически при старте контейнера
+> (Alembic-миграции в [docker-entrypoint.sh](docker-entrypoint.sh)). Отдельных
+> команд запускать не требуется.
 
-Измените параметры:
-
-```json
-{
-  "timezone": "Europe/Moscow",
-  "join_url": "https://t.me/YOUR_BOT_USERNAME?start=join",
-  "rate_limits": {
-    "broadcast_rps": 20,
-    "announce_rps": 20,
-    "burst": 5,
-    "max_retries": 5
-  },
-  "admin_panel": {
-    "items_per_page": 10
-  },
-  "sheets_sync": {
-    "enabled": false,
-    "flush_sec": 1.0,
-    "max_updates": 200,
-    "max_appends": 200,
-    "max_deletes": 200
-  }
-}
-```
-
-**Важно:** Замените `YOUR_BOT_USERNAME` на username вашего бота!
-
-Сохраните: `Ctrl+O`, `Enter`, `Ctrl+X`
-
-### Шаг 3: Настройка Google Sheets (опционально)
+### Шаг 2: Настройка Google Sheets (опционально)
 
 Если хотите синхронизировать данные с Google Sheets:
 
-#### 3.1 Создание Service Account
+#### 2.1 Создание Service Account
 
 1. Перейдите в [Google Cloud Console](https://console.cloud.google.com/)
 2. Создайте новый проект или выберите существующий
@@ -259,14 +232,14 @@ nano bot/config/config.json
    - Выберите JSON
    - Скачайте файл
 
-#### 3.2 Загрузка ключа на сервер
+#### 2.2 Загрузка ключа на сервер
 
 ```bash
 # На вашем компьютере (в той же директории где service_account.json)
 scp service_account.json user@your-server-ip:~/bots/tg-bot-giveaway-and-broadcast/
 ```
 
-#### 3.3 Настройка Google Sheets
+#### 2.3 Настройка Google Sheets
 
 1. Создайте новую Google Таблицу
 2. Нажмите "Поделиться"
@@ -277,25 +250,21 @@ scp service_account.json user@your-server-ip:~/bots/tg-bot-giveaway-and-broadcas
    https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
    ```
 
-#### 3.4 Обновление конфигурации
+#### 2.4 Обновление конфигурации
 
-В `.env` раскомментируйте и заполните:
+В `.env` включите синхронизацию:
 ```env
+SHEETS_SYNC_ENABLED=true
 GOOGLE_CREDENTIALS_PATH=/app/service_account.json
 SPREADSHEET_ID=ваш_id_таблицы
 ```
 
-В `config.json` измените:
-```json
-"sheets_sync": {
-  "enabled": true
-}
-```
-
-В `docker-compose.yml` раскомментируйте строку:
+В `docker-compose.yml` раскомментируйте строку монтирования:
 ```yaml
 - ./service_account.json:/app/service_account.json:ro
 ```
+
+Синхронизация запускается кнопкой в админ-панели.
 
 ## 🎬 Запуск и проверка
 
@@ -308,44 +277,29 @@ mkdir -p logs
 ### Шаг 2: Сборка и запуск
 
 ```bash
-# Сборка образов
-docker-compose build
-
-# Запуск в фоновом режиме
-docker-compose up -d
+# Сборка и запуск в фоне (entrypoint сам применит миграции БД)
+docker compose up -d --build
 ```
 
 ### Шаг 3: Проверка статуса
 
 ```bash
-# Проверка запущенных контейнеров
-docker-compose ps
-
-# Должно быть 3 контейнера: bot, postgres, redis
-```
-
-Ожидаемый вывод:
-```
-NAME                     STATUS              PORTS
-giveaway_bot             Up 10 seconds       
-giveaway_bot_postgres    Up 10 seconds       5432/tcp
-giveaway_bot_redis       Up 10 seconds       6379/tcp
+docker compose ps
+# Должно быть 3 сервиса: bot, postgres, redis (имена с префиксом из
+# COMPOSE_PROJECT_NAME, например giveaway_bot-bot-1). Порты БД на хост не торчат.
 ```
 
 ### Шаг 4: Проверка логов
 
 ```bash
-# Просмотр логов бота
-docker-compose logs -f bot
-
-# Нажмите Ctrl+C для выхода
+docker compose logs -f bot   # Ctrl+C для выхода
 ```
 
-Должны увидеть сообщения вроде:
+Должны увидеть:
 ```
-[INFO] Подключено к Google Sheets...
-[INFO] Bot started
-[INFO] Polling started
+Running database migrations...
+Bot started successfully!
+Run polling for bot @ваш_бот
 ```
 
 ### Шаг 5: Тестирование бота
@@ -378,39 +332,39 @@ docker-compose logs -f bot
 
 ```bash
 # Логи бота
-docker-compose logs -f bot
+docker compose logs -f bot
 
 # Логи PostgreSQL
-docker-compose logs -f postgres
+docker compose logs -f postgres
 
 # Логи Redis
-docker-compose logs -f redis
+docker compose logs -f redis
 
 # Все логи вместе
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### Перезапуск бота
 
 ```bash
 # Перезапуск только бота
-docker-compose restart bot
+docker compose restart bot
 
 # Перезапуск всех сервисов
-docker-compose restart
+docker compose restart
 ```
 
 ### Остановка бота
 
 ```bash
 # Остановка
-docker-compose stop
+docker compose stop
 
 # Остановка и удаление контейнеров (данные сохраняются)
-docker-compose down
+docker compose down
 
 # Остановка и удаление всего включая данные (осторожно!)
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Просмотр использования ресурсов
@@ -423,49 +377,48 @@ docker stats
 
 ```bash
 # Создание бэкапа
-docker-compose exec postgres pg_dump -U giveaway_user giveaway_bot > backup_$(date +%Y%m%d_%H%M%S).sql
+docker compose exec postgres pg_dump -U giveaway_user giveaway_bot > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Восстановление из бэкапа
-docker-compose exec -T postgres psql -U giveaway_user giveaway_bot < backup_20260104_120000.sql
+docker compose exec -T postgres psql -U giveaway_user giveaway_bot < backup_20260104_120000.sql
 ```
 
 ## 🔄 Обновление бота
 
+> ⚠️ Перед обновлением сервера с данными — **обязательно сделайте бэкап БД**
+> (см. ниже). Подробный безопасный сценарий — в [DEPLOY.md](DEPLOY.md).
+
 ### Обновление кода
 
 ```bash
-# Остановка бота
-docker-compose stop bot
+# Бэкап БД перед обновлением
+docker compose exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup_$(date +%F).sql
 
-# Получение обновлений
+# Получение обновлений и пересборка
 git pull
+docker compose up -d --build
 
-# Пересборка образа
-docker-compose build bot
-
-# Запуск
-docker-compose up -d bot
-
-# Проверка логов
-docker-compose logs -f bot
+# Миграции применятся автоматически при старте контейнера.
+# Проверка логов:
+docker compose logs -f bot
 ```
 
 ### Обновление конфигурации
 
 ```bash
-# Редактирование config.json
-nano bot/config/config.json
+# Вся конфигурация в .env
+nano .env
 
-# Перезапуск бота
-docker-compose restart bot
+# Применить изменения
+docker compose up -d
 ```
 
 ### Обновление зависимостей
 
 ```bash
 # Если обновился requirements.txt
-docker-compose build --no-cache bot
-docker-compose up -d bot
+docker compose build --no-cache bot
+docker compose up -d bot
 ```
 
 ## 🐛 Решение проблем
@@ -477,7 +430,7 @@ docker-compose up -d bot
 **Решение:**
 ```bash
 # Проверьте логи
-docker-compose logs bot
+docker compose logs bot
 
 # Частые причины:
 # 1. Неверный BOT_TOKEN - проверьте .env
@@ -492,12 +445,12 @@ docker-compose logs bot
 **Решение:**
 ```bash
 # Проверьте что postgres запущен
-docker-compose ps postgres
+docker compose ps postgres
 
 # Подождите 10-15 секунд после запуска
-docker-compose up -d
+docker compose up -d
 sleep 15
-docker-compose logs bot
+docker compose logs bot
 ```
 
 ### Бот не отвечает на команды
@@ -510,7 +463,7 @@ docker-compose logs bot
 # Наш бот использует polling (long polling)
 
 # Перезапустите бота
-docker-compose restart bot
+docker compose restart bot
 
 # Убедитесь что отправляете команды боту в ЛС, а не в группах
 ```
@@ -522,16 +475,16 @@ docker-compose restart bot
 **Решение:**
 ```bash
 # 1. Проверьте логи
-docker-compose logs bot | grep -i sheets
+docker compose logs bot | grep -i sheets
 
 # 2. Убедитесь что service_account.json смонтирован
-docker-compose exec bot ls -la /app/service_account.json
+docker compose exec bot ls -la /app/service_account.json
 
-# 3. Проверьте что Service Account имеет доступ к таблице
-# Откройте таблицу → Поделиться → Проверьте email из service_account.json
+# 3. Проверьте что Service Account имеет доступ "Редактор" к таблице
+# Откройте таблицу → Поделиться → проверьте email (client_email) из service_account.json
 
-# 4. Проверьте config.json
-cat bot/config/config.json | grep -A5 sheets_sync
+# 4. Проверьте, что в .env включена синхронизация
+grep -E "SHEETS_SYNC_ENABLED|SPREADSHEET_ID" .env
 ```
 
 ### Ошибка "Update is not handled"
@@ -545,10 +498,10 @@ cat bot/config/config.json | grep -A5 sheets_sync
 
 # Если ошибки на inline-кнопках:
 # 1. Перезапустите бота
-docker-compose restart bot
+docker compose restart bot
 
 # 2. Очистите состояние FSM в Redis (осторожно!)
-docker-compose exec redis redis-cli FLUSHDB
+docker compose exec redis redis-cli FLUSHDB
 ```
 
 ### Высокое использование памяти
@@ -562,7 +515,7 @@ docker stats giveaway_bot
 
 # Если > 500MB:
 # 1. Проверьте что нет утечек памяти в логах
-docker-compose logs bot | grep -i "memory\|leak"
+docker compose logs bot | grep -i "memory\|leak"
 
 # 2. Ограничьте память для контейнера
 # В docker-compose.yml добавьте:
@@ -580,8 +533,8 @@ docker-compose logs bot | grep -i "memory\|leak"
 # Эта проблема уже исправлена в текущей версии
 # Убедитесь что используете последнюю версию:
 git pull
-docker-compose build bot
-docker-compose up -d bot
+docker compose build bot
+docker compose up -d bot
 ```
 
 ## 📊 Мониторинг
@@ -590,13 +543,13 @@ docker-compose up -d bot
 
 ```bash
 # Проверка что все сервисы healthy
-docker-compose ps
+docker compose ps
 
 # Ручная проверка PostgreSQL
-docker-compose exec postgres pg_isready -U giveaway_user
+docker compose exec postgres pg_isready -U giveaway_user
 
 # Ручная проверка Redis
-docker-compose exec redis redis-cli ping
+docker compose exec redis redis-cli ping
 ```
 
 ### Статистика бота
@@ -607,13 +560,13 @@ docker-compose exec redis redis-cli ping
 
 ```bash
 # Количество пользователей (примерно)
-docker-compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT COUNT(*) FROM users;"
+docker compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT COUNT(*) FROM users;"
 
 # Количество активных розыгрышей
-docker-compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT COUNT(*) FROM giveaways WHERE is_active=true;"
+docker compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT COUNT(*) FROM giveaways WHERE is_active=true;"
 
 # Количество участников в текущем розыгрыше
-docker-compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT g.id, g.description, COUNT(p.id) FROM giveaways g LEFT JOIN participants p ON g.id=p.giveaway_id WHERE g.is_active=true GROUP BY g.id;"
+docker compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT g.id, g.description, COUNT(p.id) FROM giveaways g LEFT JOIN participants p ON g.id=p.giveaway_id WHERE g.is_active=true GROUP BY g.id;"
 ```
 
 ## 🔐 Безопасность
@@ -622,25 +575,16 @@ docker-compose exec postgres psql -U giveaway_user giveaway_bot -c "SELECT g.id,
 
 1. **Смените пароль PostgreSQL в продакшене**
 
-В `docker-compose.yml`:
-```yaml
-environment:
-  POSTGRES_USER: giveaway_user
-  POSTGRES_PASSWORD: ваш_сложный_пароль_здесь  # Измените!
-```
-
-И в `.env`:
+Пароль задаётся только в `.env` (compose берёт его оттуда):
 ```env
+POSTGRES_PASSWORD=ваш_сложный_пароль_здесь
 DATABASE_URL=postgresql+asyncpg://giveaway_user:ваш_сложный_пароль_здесь@postgres:5432/giveaway_bot
 ```
 
-2. **Закройте порты PostgreSQL и Redis**
+2. **Порты PostgreSQL и Redis**
 
-В `docker-compose.yml` удалите/закомментируйте:
-```yaml
-# ports:
-#   - "5432:5432"  # Закомментируйте эти строки
-```
+По умолчанию они **не публикуются** на хост (в `docker-compose.yml` проброс
+портов закомментирован) — отдельно закрывать ничего не нужно.
 
 3. **Настройте файрвол**
 
@@ -654,8 +598,8 @@ sudo ufw enable
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
 
 ## 📞 Поддержка
@@ -663,7 +607,7 @@ docker-compose up -d
 При возникновении проблем:
 
 1. Проверьте этот документ
-2. Изучите логи: `docker-compose logs -f bot`
+2. Изучите логи: `docker compose logs -f bot`
 3. Создайте Issue на GitHub с описанием проблемы и логами
 
 ---

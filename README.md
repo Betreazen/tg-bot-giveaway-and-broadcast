@@ -27,7 +27,9 @@
 - **База данных**: PostgreSQL 16+
 - **Кеш/FSM**: Redis
 - **ORM**: SQLAlchemy 2.0 (async)
-- **Деплой**: Docker + docker-compose
+- **Миграции**: Alembic
+- **Тесты**: pytest
+- **Деплой**: Docker + docker compose
 
 ## 📋 Требования
 
@@ -41,31 +43,39 @@
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/your-username/tg-bot-giveaway-and-broadcast.git
+git clone https://github.com/Betreazen/tg-bot-giveaway-and-broadcast.git
 cd tg-bot-giveaway-and-broadcast
 ```
 
 ### 2. Настройка переменных окружения
 
-Скопируйте файл примера и заполните своими данными:
+Вся конфигурация — в одном файле `.env` (отдельный `config.json` больше не нужен).
 
 ```bash
 cp .env.example .env
 ```
 
-Отредактируйте `.env`:
+Заполните **обязательные** параметры:
 
 ```env
+# Уникальное имя стека (чтобы не конфликтовать с другими ботами на сервере)
+COMPOSE_PROJECT_NAME=giveaway_bot
+
 # Получите токен у @BotFather
 BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 
 # ID администраторов (через запятую)
 ADMIN_IDS=123456789,987654321
 
-# ID канала (начинается с -100)
+# ID канала (начинается с -100); бот должен быть админом канала
 CHANNEL_ID=-1001234567890
 
-# Остальные настройки можно оставить по умолчанию
+# Ссылка кнопки "Участвовать"
+JOIN_URL=https://t.me/your_bot?start=join
+
+# Пароль БД — задайте свой и продублируйте его в DATABASE_URL
+POSTGRES_PASSWORD=придумайте_пароль
+DATABASE_URL=postgresql+asyncpg://giveaway_user:придумайте_пароль@postgres:5432/giveaway_bot
 ```
 
 **Как получить ID канала:**
@@ -73,50 +83,30 @@ CHANNEL_ID=-1001234567890
 2. Перешлите любое сообщение из канала боту
 3. Скопируйте ID (например: -1001234567890)
 
-### 3. Настройка конфигурации бота
+> ⏰ Всё время в боте отображается по Москве (МСК, GMT+3) независимо от часового
+> пояса сервера. Лимиты рассылки (`BROADCAST_RPS`, `ANNOUNCE_RPS`) тоже в `.env`.
 
-Скопируйте файл примера конфигурации:
-
-```bash
-cp bot/config/config.json.example bot/config/config.json
-```
-
-Отредактируйте `bot/config/config.json`:
-
-```json
-{
-  "timezone": "Europe/Moscow",
-  "join_url": "https://t.me/your_bot?start=join",
-  "rate_limits": {
-    "broadcast_rps": 20,
-    "announce_rps": 20,
-    "burst": 5,
-    "max_retries": 5
-  },
-  "sheets_sync": {
-    "enabled": false
-  }
-}
-```
-
-Замените `your_bot` на имя вашего бота.
-
-### 4. Запуск бота
+### 3. Запуск бота
 
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
+
+Контейнер сам применит миграции БД (`alembic upgrade head`) и запустит бота.
+Postgres и Redis поднимаются рядом и **не публикуют порты на хост** — конфликтов
+с другими ботами на сервере нет.
 
 Проверка логов:
 
 ```bash
-docker-compose logs -f bot
+docker compose logs -f bot
 ```
 
-Остановка бота:
+Остановка:
 
 ```bash
-docker-compose down
+docker compose down          # данные БД сохраняются
+docker compose down -v       # удалить данные БД
 ```
 
 ## 📚 Подробная инструкция
@@ -149,82 +139,85 @@ docker-compose down
 ```
 .
 ├── bot/                      # Исходный код бота
-│   ├── config/              # Конфигурация
-│   │   ├── config.json      # Настройки (не в Git)
-│   │   └── settings.py      # Загрузчик настроек
+│   ├── config/settings.py   # Настройки из .env (pydantic-settings)
 │   ├── db/                  # База данных
 │   │   ├── models.py        # SQLAlchemy модели
 │   │   ├── base.py          # Подключение к БД
 │   │   └── repo/            # Репозитории (CRUD)
+│   ├── migrations/          # Alembic-миграции (env.py + versions/)
 │   ├── handlers/            # Обработчики команд
 │   │   ├── start.py         # /start для пользователей
 │   │   ├── verification.py  # Верификация при регистрации
 │   │   └── admin/           # Админ-панель
+│   ├── middlewares/         # Middleware (проверка админа)
 │   ├── keyboards/           # Inline клавиатуры
 │   ├── services/            # Бизнес-логика
 │   │   ├── mailing.py       # Массовые рассылки
 │   │   ├── giveaway_service.py  # Логика розыгрышей
 │   │   ├── redis_client.py  # Доступ к Redis для верификации
 │   │   └── sheets_sync.py   # Google Sheets (опционально)
-│   ├── messages/            # Тексты бота
-│   │   └── messages.json    # Все сообщения на русском
+│   ├── utils/datetimes.py   # Время в МСК (GMT+3)
+│   ├── messages/messages.json   # Все сообщения на русском
 │   └── main.py              # Точка входа
-├── .env                     # Секретные переменные (не в Git)
-├── .env.example             # Пример переменных
+├── tests/                   # Тесты (pytest)
+├── alembic.ini              # Конфиг Alembic
+├── docker-entrypoint.sh     # Накат миграций + запуск бота
+├── .env / .env.example      # Конфигурация (.env не в Git)
 ├── docker-compose.yml       # Docker конфигурация
 ├── Dockerfile               # Образ бота
-├── requirements.txt         # Python зависимости
+├── requirements.txt         # Python зависимости (prod)
+├── requirements-dev.txt     # Зависимости для тестов/линта
 ├── README.md                # Этот файл
-└── SETUP.md                 # Подробная инструкция
+├── QUICK_START.md           # Быстрый старт
+├── SETUP.md                 # Подробная инструкция
+└── DEPLOY.md                # Деплой и безопасное обновление БД
 ```
 
 ## 🔧 Дополнительные настройки
 
 ### Google Sheets синхронизация (опционально)
 
-1. Создайте Service Account в Google Cloud Console
-2. Скачайте `service_account.json`
-3. Поместите файл в корень проекта
-4. В `.env` добавьте:
+Приватный ключ не хранится в `.env` — это отдельный файл, на который `.env` лишь
+указывает:
+
+1. Создайте Service Account в Google Cloud Console и скачайте `service_account.json`
+2. Поместите файл в корень проекта (рядом с `docker-compose.yml`)
+3. В `.env` включите синхронизацию:
    ```env
+   SHEETS_SYNC_ENABLED=true
    GOOGLE_CREDENTIALS_PATH=/app/service_account.json
    SPREADSHEET_ID=your_spreadsheet_id
    ```
-5. В `config.json` включите синхронизацию:
-   ```json
-   "sheets_sync": {
-     "enabled": true
-   }
-   ```
-6. В `docker-compose.yml` раскомментируйте строку:
+4. В `docker-compose.yml` раскомментируйте строку монтирования:
    ```yaml
    - ./service_account.json:/app/service_account.json:ro
    ```
+5. Дайте сервис-аккаунту (`client_email` из JSON) доступ **«Редактор»** к таблице
+
+Синхронизация запускается кнопкой в админ-панели.
 
 ### Настройка rate limits
 
-В `config.json` можно изменить скорость рассылок:
+Скорость рассылок задаётся в `.env`:
 
-```json
-"rate_limits": {
-  "broadcast_rps": 20,    // сообщений в секунду при рассылке
-  "announce_rps": 20,     // сообщений в секунду при анонсах
-  "burst": 5,             // пиковая нагрузка
-  "max_retries": 5        // количество повторов при ошибках
-}
+```env
+BROADCAST_RPS=20   # сообщений в секунду при рассылке
+ANNOUNCE_RPS=20    # сообщений в секунду при анонсах
+MAX_RETRIES=5      # повторов при ошибках Telegram
 ```
 
 ## 🐛 Решение проблем
 
 ### Бот не запускается
 
-1. Проверьте логи: `docker-compose logs bot`
-2. Убедитесь что `.env` заполнен корректно
-3. Проверьте что PostgreSQL и Redis запущены: `docker-compose ps`
+1. Проверьте логи: `docker compose logs bot`
+2. Убедитесь что `.env` заполнен корректно (пароль в `DATABASE_URL` совпадает с `POSTGRES_PASSWORD`)
+3. Проверьте что PostgreSQL и Redis запущены: `docker compose ps`
 
 ### Ошибка подключения к базе данных
 
-Подождите 10-15 секунд после `docker-compose up` - база данных инициализируется.
+Подождите 10-15 секунд после `docker compose up` — база данных инициализируется,
+затем entrypoint применяет миграции.
 
 ### Кнопки не работают
 
@@ -232,9 +225,10 @@ docker-compose down
 
 ### Google Sheets не синхронизируется
 
-1. Проверьте что `service_account.json` находится в корне проекта
-2. Убедитесь что Service Account имеет доступ к таблице
-3. В `config.json` установите `"enabled": true`
+1. Проверьте что `service_account.json` находится в корне проекта и строка
+   монтирования в `docker-compose.yml` раскомментирована
+2. Убедитесь что Service Account (`client_email`) имеет доступ «Редактор» к таблице
+3. В `.env` установите `SHEETS_SYNC_ENABLED=true` и заполните `SPREADSHEET_ID`
 
 ## 📝 Логирование
 
@@ -258,7 +252,7 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
 
 При возникновении проблем:
 1. Проверьте [SETUP.md](SETUP.md)
-2. Изучите логи: `docker-compose logs -f bot`
+2. Изучите логи: `docker compose logs -f bot`
 3. Создайте Issue с описанием проблемы и логами
 
 ## 📄 Лицензия
