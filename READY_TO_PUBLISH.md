@@ -25,16 +25,13 @@ tg-bot-giveaway-and-broadcast/
 │   └── PULL_REQUEST_TEMPLATE.md   ✅ Шаблон для PR
 │
 ├── bot/                            ✅ Исходный код
-│   ├── config/
-│   │   ├── config.json.example    ✨ НОВОЕ (пример конфигурации)
-│   │   ├── settings.py
-│   │   └── __init__.py
-│   ├── db/
-│   ├── handlers/
-│   ├── keyboards/
-│   ├── messages/
-│   ├── services/
+│   ├── config/settings.py          ✅ Конфиг из .env
+│   ├── db/  ├── migrations/         ✅ Модели + Alembic
+│   ├── handlers/  ├── middlewares/
+│   ├── keyboards/  ├── messages/
+│   ├── services/  ├── utils/
 │   └── main.py
+├── tests/                          ✅ Тесты (pytest)
 │
 ├── 📄 README.md                    ✅ Главная страница
 ├── 📄 QUICK_START.md               ✨ НОВОЕ (быстрый старт)
@@ -90,9 +87,9 @@ tg-bot-giveaway-and-broadcast/
 
 ### ✅ Конфигурация
 
-1. **config.json.example** - Пример настроек бота
-2. **.env.example** - Пример переменных окружения
-3. **.gitignore** - Исключает секреты и конфигурацию
+1. **.env.example** - Единый пример всех переменных окружения
+2. **Alembic** - миграции БД (`alembic.ini`, `bot/migrations/`)
+3. **.gitignore** - Исключает секреты (`.env`, `service_account.json`)
 4. **.dockerignore** - Оптимизирует Docker сборку
 
 ### ✅ Docker
@@ -134,11 +131,9 @@ tg-bot-giveaway-and-broadcast/
    - Add CHANGELOG with version history
    - Add LICENSE (MIT)
    - Add GitHub templates (Issues, PR)
-   - Create config.json.example
-   - Update .gitignore to exclude config.json
-   - Update .dockerignore for optimized builds
-   - Make service_account.json optional in docker-compose
-   - Optimize Dockerfile"
+   - Single-file .env config + Alembic migrations + tests
+   - Update .gitignore/.dockerignore
+   - Make service_account.json optional in docker-compose"
    ```
 
 3. **Создайте** репозиторий на GitHub:
@@ -167,23 +162,21 @@ tg-bot-giveaway-and-broadcast/
 ### Для локального использования:
 
 1. Следуйте [QUICK_START.md](QUICK_START.md) или [SETUP.md](SETUP.md)
-2. Создайте `.env` из `.env.example`
-3. Создайте `config.json` из `config.json.example`
-4. Запустите: `docker-compose up -d`
+2. Создайте `.env` из `.env.example` и заполните
+3. Запустите: `docker compose up -d --build` (миграции применятся сами)
 
 ## 🔐 Проверка безопасности
 
 ### ✅ В Git НЕ попадут:
 
 - `.env` - токены и пароли
-- `bot/config/config.json` - реальная конфигурация
 - `service_account.json` - Google credentials
+- `docker-compose.override.yml` - локальные оверрайды
 - `logs/` - логи бота
 
-### ✅ В Git попадут только примеры:
+### ✅ В Git попадёт только пример:
 
 - `.env.example`
-- `bot/config/config.json.example`
 
 ## 📝 Важные файлы для пользователей
 
@@ -201,7 +194,7 @@ tg-bot-giveaway-and-broadcast/
 
 ✅ **Готовый к работе** - клонировал и запустил
 ✅ **Полная документация** - на русском языке
-✅ **Простая настройка** - только .env и config.json
+✅ **Простая настройка** - вся конфигурация в одном `.env`
 ✅ **Docker deployment** - одна команда для запуска
 ✅ **Безопасность** - примеры вместо реальных данных
 ✅ **Расширяемость** - четкая структура кода

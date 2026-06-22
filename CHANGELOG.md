@@ -5,6 +5,36 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 и этот проект придерживается [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.0] - 2026-06-22
+
+### Изменено (BREAKING)
+- ⚙️ Вся конфигурация перенесена в единый `.env`; отдельный `config.json` удалён
+  (`JOIN_URL`, лимиты рассылки, `SHEETS_SYNC_ENABLED` и пр. теперь в `.env`)
+- ⏰ Отображаемое время жёстко зафиксировано на МСК (GMT+3) независимо от
+  часового пояса сервера; параметр `TIMEZONE` убран
+- 🗄 Схема БД управляется Alembic-миграциями вместо `create_all`
+
+### Добавлено
+- 🗄 Alembic-миграции: идемпотентная начальная миграция (безопасный накат на
+  существующую БД без потери данных), авто-`upgrade` в `docker-entrypoint.sh`
+- 🐳 Изоляция Docker: префиксы имён/томов/сети (`COMPOSE_PROJECT_NAME`), порты БД
+  не публикуются на хост, non-root образ, лимиты памяти — не конфликтует с
+  другими ботами на сервере
+- 🔑 `REDIS_FSM_PREFIX` — изоляция FSM-ключей при общем Redis
+- 🛡 Middleware проверки админа (мастера ранее не были защищены)
+- 🧪 Набор тестов (pytest) + `requirements-dev.txt`; `DEPLOY.md`
+
+### Исправлено
+- 🐛 Гонка при параллельных `/start` от нового пользователя — атомарный upsert
+  (`INSERT ... ON CONFLICT`) для users и participants
+- 🐛 Массовая рассылка больше не удерживает открытую сессию БД (утечка пула)
+- ⚡ Синхронизация Google Sheets вынесена в поток (не блокирует бота); убран N+1
+  в сводной таблице
+- 🐛 `get_user_count` через `COUNT()`; ротация логов; удалён мёртвый дубль
+  обработчика `nav:main_menu`
+
+---
+
 ## [1.1.0] - 2026-06-02
 
 ### Добавлено
@@ -75,5 +105,6 @@
 
 ---
 
-[1.1.0]: https://github.com/your-username/tg-bot-giveaway-and-broadcast/releases/tag/v1.1.0
-[1.0.0]: https://github.com/your-username/tg-bot-giveaway-and-broadcast/releases/tag/v1.0.0
+[2.0.0]: https://github.com/Betreazen/tg-bot-giveaway-and-broadcast/releases/tag/v2.0.0
+[1.1.0]: https://github.com/Betreazen/tg-bot-giveaway-and-broadcast/releases/tag/v1.1.0
+[1.0.0]: https://github.com/Betreazen/tg-bot-giveaway-and-broadcast/releases/tag/v1.0.0

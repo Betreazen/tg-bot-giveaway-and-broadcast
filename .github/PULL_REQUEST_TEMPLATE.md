@@ -24,7 +24,7 @@ Closes #(issue)
 
 ## 🧪 Как проверить изменения
 1. Клонируйте ветку: `git checkout <branch-name>`
-2. Запустите: `docker-compose up --build`
+2. Запустите: `docker compose up -d --build`
 3. Выполните следующие действия:
    - [ ] ...
    - [ ] ...

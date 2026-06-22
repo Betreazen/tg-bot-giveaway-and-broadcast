@@ -15,7 +15,7 @@ assignees: ''
 - [ ] Прочитал README.md
 - [ ] Прочитал SETUP.md
 - [ ] Проверил существующие Issues
-- [ ] Проверил логи: `docker-compose logs bot`
+- [ ] Проверил логи: `docker compose logs bot`
 
 
 ## 💻 Контекст

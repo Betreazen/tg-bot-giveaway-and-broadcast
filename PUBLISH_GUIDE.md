@@ -11,19 +11,22 @@
 - ❌ Старый quickstart.md
 
 ### ✨ Добавлено
-- ✅ **README.md** - главная страница проекта с кратким описанием
-- ✅ **SETUP.md** - подробная инструкция по установке и настройке
+- ✅ **README.md** / **QUICK_START.md** - главная страница и быстрый старт
+- ✅ **SETUP.md** / **DEPLOY.md** - установка и безопасный деплой/обновление БД
 - ✅ **CONTRIBUTING.md** - руководство для разработчиков
 - ✅ **CHANGELOG.md** - история изменений проекта
 - ✅ **LICENSE** - MIT лицензия
 - ✅ **.dockerignore** - оптимизация Docker сборки
-- ✅ **config.json.example** - пример конфигурации
-- ✅ Обновленный **.gitignore** - исключает config.json и секреты
+- ✅ **Alembic** (`alembic.ini`, `bot/migrations/`) - миграции БД
+- ✅ **tests/** + **requirements-dev.txt** - тесты (pytest) и dev-зависимости
+- ✅ Обновленный **.gitignore** - исключает `.env`, `service_account.json`, секреты
 
 ### 🔧 Обновлено
-- ✅ **Dockerfile** - удалены явные копирования config.json
-- ✅ **docker-compose.yml** - service_account.json теперь опциональный
-- ✅ **.env.example** - актуальный пример переменных окружения
+- ✅ **Вся конфигурация в `.env`** - отдельный `config.json` удалён
+- ✅ **docker-compose.yml** - изоляция (префиксы, без проброса портов),
+  `service_account.json` монтируется опционально
+- ✅ **docker-entrypoint.sh** - автоматический накат миграций перед запуском
+- ✅ **.env.example** - единый актуальный пример конфигурации
 
 ## 📝 Шаги для публикации на GitHub
 
@@ -37,8 +40,8 @@ git status
 
 # Должны быть проигнорированы:
 # - .env
-# - bot/config/config.json
 # - service_account.json
+# - docker-compose.override.yml
 # - logs/
 ```
 
@@ -51,13 +54,11 @@ git add .
 # Создайте коммит
 git commit -m "chore: Prepare project for GitHub publication
 
-- Remove temporary documentation files
-- Add comprehensive README, SETUP, and CONTRIBUTING guides
-- Add LICENSE (MIT)
-- Add CHANGELOG
+- Add comprehensive README, QUICK_START, SETUP, DEPLOY, CONTRIBUTING guides
+- Add LICENSE (MIT) and CHANGELOG
 - Update .gitignore and .dockerignore
-- Make config.json and service_account.json optional
-- Add example configuration files"
+- Single-file .env config + Alembic migrations + tests
+- Make service_account.json (Google Sheets) optional"
 ```
 
 ### Шаг 3: Создание репозитория на GitHub
@@ -137,21 +138,20 @@ on:
     branches: [ main ]
 
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: |
-          pip install ruff
+        run: pip install -r requirements-dev.txt
       - name: Lint with ruff
-        run: |
-          ruff check bot/
-          ruff format --check bot/
+        run: ruff check bot/ tests/
+      - name: Run tests
+        run: pytest -q
 ```
 
 ### Шаг 7: Обновление README с правильными ссылками
@@ -195,26 +195,20 @@ git push
 
 ```
 tg-bot-giveaway-and-broadcast/
-├── 📄 README.md              ← Первое что видят пользователи
-├── 📄 SETUP.md               ← Подробная инструкция
-├── 📄 CONTRIBUTING.md        ← Для контрибьюторов
-├── 📄 CHANGELOG.md           ← История версий
-├── 📄 LICENSE               ← MIT лицензия
-├── 🐳 Dockerfile
-├── 🐳 docker-compose.yml
-├── 📋 requirements.txt
+├── 📄 README.md / QUICK_START.md   ← Обзор и быстрый старт
+├── 📄 SETUP.md / DEPLOY.md         ← Установка и деплой
+├── 📄 CONTRIBUTING.md / CHANGELOG.md
+├── 📄 LICENSE                       ← MIT лицензия
+├── 🐳 Dockerfile / docker-compose.yml / docker-entrypoint.sh
+├── 🔧 alembic.ini
+├── 📋 requirements.txt / requirements-dev.txt
 ├── 📋 .env.example
-├── 🔧 .gitignore
-├── 🔧 .dockerignore
+├── 🔧 .gitignore / .dockerignore / .gitattributes
+├── 🧪 tests/
 └── 📁 bot/
-    ├── config/
-    │   ├── config.json.example  ← Пример конфигурации
-    │   └── settings.py
-    ├── db/
-    ├── handlers/
-    ├── keyboards/
-    ├── messages/
-    └── services/
+    ├── config/settings.py          ← Конфиг из .env
+    ├── db/  ├── migrations/  ├── handlers/  ├── middlewares/
+    ├── keyboards/  ├── messages/  ├── services/  └── utils/
 ```
 
 ## ✨ Дополнительные улучшения
@@ -254,27 +248,25 @@ tg-bot-giveaway-and-broadcast/
 
 ❌ **НЕ должно быть в Git:**
 - `.env` файл с реальными токенами
-- `bot/config/config.json` с реальными данными
 - `service_account.json` с Google credentials
+- `docker-compose.override.yml` (локальные оверрайды)
 - `logs/` с реальными логами
 - Любые файлы с паролями или токенами
 
 ✅ **Должно быть в Git:**
 - `.env.example` с примерами
-- `bot/config/config.json.example` с примерами
 - Документация
 - Исходный код без секретов
 
 ### Проверка на секреты
 
 ```bash
-# Проверка что .env не добавлен
-git ls-files | grep -E '\.env$|config\.json$|service_account\.json'
+# Проверка что секреты не добавлены
+git ls-files | grep -E '\.env$|service_account\.json'
 
 # Должно вернуть пусто!
 # Если что-то нашлось - удалите из Git:
-git rm --cached .env
-git rm --cached bot/config/config.json
+git rm --cached .env service_account.json
 git commit -m "Remove secrets from Git"
 ```
 

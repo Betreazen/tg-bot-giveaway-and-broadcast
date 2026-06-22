@@ -1,5 +1,17 @@
 # Telegram Giveaway Bot - Design Document
 
+> ⚠️ **Историческая проектная спецификация.** Это исходный design-документ. С тех
+> пор реализация изменилась — актуальное состояние см. в [README.md](../../README.md),
+> [QUICK_START.md](../../QUICK_START.md), [SETUP.md](../../SETUP.md),
+> [DEPLOY.md](../../DEPLOY.md) и [CHANGELOG.md](../../CHANGELOG.md).
+>
+> Ключевые отличия от этого документа:
+> - Конфигурация — **в едином `.env`** (отдельный `config.json` удалён).
+> - Схема БД управляется **Alembic-миграциями** (авто-накат при старте), а не `create_all`.
+> - Время отображения **жёстко зафиксировано на МСК (GMT+3)** и не конфигурируется.
+> - Добавлены: middleware проверки админа, изоляция Docker (префиксы, без проброса
+>   портов), `REDIS_FSM_PREFIX`, тесты (pytest), атомарные upsert'ы для users/participants.
+
 ## Project Overview
 
 A fully functional Telegram bot for managing giveaways with an admin panel built entirely on inline buttons. The bot provides user participation through subscription verification and comprehensive admin controls via a step-by-step wizard interface.

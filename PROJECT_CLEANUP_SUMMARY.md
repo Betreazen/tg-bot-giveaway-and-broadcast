@@ -44,30 +44,29 @@
 #### Инструкции по публикации
 - ✅ **PUBLISH_GUIDE.md** (9 KB) - Пошаговое руководство по публикации на GitHub
 
-### 3. Создание примеров конфигурации
+### 3. Конфигурация
 
-- ✅ **bot/config/config.json.example** - Пример настроек бота
-- ✅ **.env.example** - Уже существовал, проверен и актуален
+- ✅ **.env.example** - единый актуальный пример всех переменных (отдельный
+  `config.json` удалён — вся конфигурация в `.env`)
+- ✅ **Alembic** (`alembic.ini`, `bot/migrations/`) - миграции БД
 
 ### 4. Обновление служебных файлов
 
 #### .gitignore
-- ✅ Добавлено исключение `bot/config/config.json`
-- ✅ Добавлено исключение `!bot/config/config.json.example`
-- ✅ Удалено исключение `.dockerignore` (теперь в Git)
+- ✅ Исключает `.env`, `service_account.json`, `docker-compose.override.yml`, секреты
 
 #### .dockerignore
-- ✅ Полностью переписан для оптимизации сборки Docker
-- ✅ Исключает документацию, IDE файлы, логи, тесты
-- ✅ Уменьшает размер Docker образа
+- ✅ Оптимизирует сборку Docker (исключает документацию, IDE, логи, тесты)
 
 #### Dockerfile
-- ✅ Удалены явные копирования `config.json` и `messages.json`
-- ✅ Теперь копирует всю папку `bot/` целиком
+- ✅ Копирует `bot/`, `alembic.ini` и `docker-entrypoint.sh`; запуск от non-root
 
 #### docker-compose.yml
-- ✅ Монтирование `service_account.json` теперь опциональное (закомментировано)
-- ✅ Добавлен комментарий на русском для Google Sheets
+- ✅ Изоляция: префиксы имён/томов/сети, без проброса портов на хост
+- ✅ Монтирование `service_account.json` опциональное (для Google Sheets)
+
+#### docker-entrypoint.sh
+- ✅ Применяет миграции (`alembic upgrade head`) перед запуском бота
 
 ### 5. Проверка структуры проекта
 
@@ -87,38 +86,20 @@ tg-bot-giveaway-and-broadcast/
 ├── 📋 .env.example             ✅ Актуален
 ├── 🔧 .gitignore               ✅ Обновлен
 ├── 🔧 .dockerignore            ✅ Обновлен
+├── 🧪 tests/                   ✅ Тесты (pytest)
+├── 🔧 alembic.ini              ✅ Конфиг миграций
+├── 🐳 docker-entrypoint.sh     ✅ Накат миграций + запуск
 └── 📁 bot/
-    ├── 📁 config/
-    │   ├── config.json.example ✅ Новый
-    │   ├── settings.py         ✅ Актуален
-    │   └── __init__.py
-    ├── 📁 db/
-    │   ├── models.py           ✅ Актуален
-    │   ├── base.py             ✅ Актуален
-    │   ├── migrations/
-    │   └── repo/
-    ├── 📁 handlers/
-    │   ├── start.py            ✅ Актуален
-    │   └── admin/
-    │       ├── entry.py
-    │       ├── menu.py
-    │       ├── giveaway_wizard.py  ✅ С исправлениями навигации
-    │       ├── date_picker.py      ✅ С исправлением форматирования
-    │       ├── announce.py
-    │       ├── winners.py
-    │       └── broadcast_wizard.py
-    ├── 📁 keyboards/
-    │   ├── admin.py
-    │   └── common.py
-    ├── 📁 messages/
-    │   ├── messages.json       ✅ Актуален
-    │   └── i18n.py
-    ├── 📁 services/
-    │   ├── mailing.py
-    │   ├── giveaway_service.py
-    │   ├── subscription.py
-    │   └── sheets_sync.py      ✅ С улучшениями
-    └── main.py                 ✅ Актуален
+    ├── 📁 config/settings.py   ✅ Конфиг из .env
+    ├── 📁 db/                  (models.py, base.py, repo/)
+    ├── 📁 migrations/          ✅ Alembic (env.py + versions/)
+    ├── 📁 handlers/            (start.py, verification.py, admin/)
+    ├── 📁 middlewares/         ✅ Проверка админа
+    ├── 📁 keyboards/           (admin.py, common.py)
+    ├── 📁 messages/            (messages.json, i18n.py)
+    ├── 📁 services/            (mailing, giveaway, subscription, sheets_sync, redis_client)
+    ├── 📁 utils/datetimes.py   ✅ Время в МСК (GMT+3)
+    └── main.py
 ```
 
 ## 🎯 Что НЕ включено в Git (секреты)
@@ -126,13 +107,12 @@ tg-bot-giveaway-and-broadcast/
 Эти файлы должны быть созданы локально и **НЕ должны** попадать в Git:
 
 - ❌ `.env` - реальные токены и пароли
-- ❌ `bot/config/config.json` - реальная конфигурация
 - ❌ `service_account.json` - Google credentials
+- ❌ `docker-compose.override.yml` - локальные оверрайды
 - ❌ `logs/` - логи бота
 
-Вместо них в Git есть примеры:
+Вместо них в Git есть пример:
 - ✅ `.env.example`
-- ✅ `bot/config/config.json.example`
 
 ## 📊 Статистика
 
@@ -180,8 +160,8 @@ tg-bot-giveaway-and-broadcast/
 
 1. Прочитайте [QUICK_START.md](QUICK_START.md) для быстрого старта
 2. Или [SETUP.md](SETUP.md) для подробной инструкции
-3. Создайте `.env` и `config.json` из примеров
-4. Запустите: `docker-compose up -d`
+3. Создайте `.env` из `.env.example` и заполните
+4. Запустите: `docker compose up -d --build` (миграции применятся сами)
 
 ## 🎉 Проект готов!
 

@@ -24,7 +24,7 @@
 1. **Описание проблемы**: Что произошло?
 2. **Как воспроизвести**: Шаги для воспроизведения ошибки
 3. **Ожидаемое поведение**: Что должно было произойти?
-4. **Логи**: Вывод `docker-compose logs bot`
+4. **Логи**: Вывод `docker compose logs bot`
 5. **Окружение**: ОС, версия Docker, версия бота
 
 ### Предложение новых функций
@@ -114,67 +114,54 @@ test: Add tests for giveaway service
 
 1. **Клонирование репозитория**
 ```bash
-git clone https://github.com/your-username/tg-bot-giveaway-and-broadcast.git
+git clone https://github.com/Betreazen/tg-bot-giveaway-and-broadcast.git
 cd tg-bot-giveaway-and-broadcast
 ```
 
 2. **Настройка окружения**
 ```bash
 cp .env.example .env
-cp bot/config/config.json.example bot/config/config.json
-# Заполните .env и config.json
+# Заполните .env (вся конфигурация — в одном файле, config.json больше нет)
 ```
 
-3. **Запуск в режиме разработки**
+3. **Запуск**
 ```bash
-docker-compose up
+docker compose up -d --build   # entrypoint сам применит миграции
+```
+После изменений в коде пересоберите: `docker compose up -d --build`.
+
+4. **Тесты и линтинг локально** (без Docker, нужен Python 3.12)
+```bash
+pip install -r requirements-dev.txt
+pytest                 # все тесты
+pytest --cov=bot       # с покрытием
+ruff check bot/ tests/
+ruff format bot/ tests/
 ```
 
-4. **Внесение изменений**
-- Измените код в `bot/`
-- Бот автоматически перезагрузится (hot reload через volume mount)
+### Работа с базой данных (миграции)
 
-5. **Тестирование**
-```bash
-# Запуск тестов
-pytest
-
-# С покрытием
-pytest --cov=bot
-```
-
-6. **Линтинг**
-```bash
-ruff check bot/
-ruff format bot/
-```
-
-### Работа с базой данных
-
-При изменении моделей создайте миграцию:
+Схема управляется Alembic; при старте контейнера миграции применяются
+автоматически (`alembic upgrade head` в [docker-entrypoint.sh](docker-entrypoint.sh)).
+При изменении моделей сгенерируйте новую миграцию:
 
 ```bash
-# Войдите в контейнер
-docker-compose exec bot bash
-
-# Создайте миграцию
-alembic revision --autogenerate -m "Add new field"
-
-# Примените миграцию
-alembic upgrade head
+# при поднятой БД
+docker compose exec bot alembic revision --autogenerate -m "Add new field"
+# проверьте файл в bot/migrations/versions/ и задеплойте — upgrade применится сам
 ```
 
 ### Отладка
 
 ```bash
 # Просмотр логов
-docker-compose logs -f bot
+docker compose logs -f bot
 
 # Доступ к базе данных
-docker-compose exec postgres psql -U giveaway_user giveaway_bot
+docker compose exec postgres psql -U giveaway_user giveaway_bot
 
 # Доступ к Redis
-docker-compose exec redis redis-cli
+docker compose exec redis redis-cli
 ```
 
 ## ✅ Чеклист перед Pull Request
@@ -221,23 +208,32 @@ Closes #123
 
 ### Написание тестов
 
-Используйте pytest:
+Тесты лежат в `tests/` (чистая логика + моки, без реальных токенов). Пример с
+моками репозиториев (как в [tests/test_giveaway_service.py](tests/test_giveaway_service.py)):
 
 ```python
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
+
+import bot.services.giveaway_service as gs
 from bot.services.giveaway_service import select_winners
 
+
 @pytest.mark.asyncio
-async def test_select_winners_success(db_session):
-    """Тест успешного выбора победителей."""
-    # Arrange
-    giveaway = await create_test_giveaway(db_session)
-    
-    # Act
-    winners = await select_winners(db_session, giveaway.id)
-    
-    # Assert
-    assert len(winners) == giveaway.num_winners
+async def test_select_winners_picks_requested_count(monkeypatch):
+    parts = [SimpleNamespace(user_id=i, username_snapshot=f"u{i}") for i in range(10)]
+    monkeypatch.setattr(gs.participant_repo, "get_participants", AsyncMock(return_value=parts))
+
+    async def fake_add_winners(**kwargs):
+        return [object() for _ in kwargs["user_ids"]]
+
+    monkeypatch.setattr(gs.winner_repo, "add_winners", AsyncMock(side_effect=fake_add_winners))
+
+    giveaway = SimpleNamespace(id=1, num_winners=3, ended_at=None, end_at=None)
+    winners = await select_winners(session=None, giveaway=giveaway)
+    assert len(winners) == 3
 ```
 
 ### Запуск тестов

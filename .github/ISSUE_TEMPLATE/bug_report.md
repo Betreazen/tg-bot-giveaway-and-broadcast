@@ -26,7 +26,7 @@ assignees: ''
 
 
 ## 📝 Логи
-<!-- Вставьте вывод команды: docker-compose logs bot -->
+<!-- Вставьте вывод команды: docker compose logs bot -->
 ```
 Вставьте логи здесь
 ```
