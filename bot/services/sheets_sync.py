@@ -279,9 +279,12 @@ async def sync_all_data() -> bool:
 
             from bot.db.models import Giveaway, Participant
 
+            # LEFT JOIN (outerjoin): keep every participant even if its giveaway row
+            # was removed — an INNER JOIN would silently drop those participants and
+            # make the Participants sheet show fewer rows than actually exist.
             result = await session.execute(
                 select(Participant, Giveaway.start_at, Giveaway.end_at)
-                .join(Giveaway, Participant.giveaway_id == Giveaway.id)
+                .outerjoin(Giveaway, Participant.giveaway_id == Giveaway.id)
             )
             participants_rows = result.all()
             participants_data = [
