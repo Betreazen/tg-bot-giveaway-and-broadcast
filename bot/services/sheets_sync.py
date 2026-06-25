@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from bot.utils.datetimes import fmt_local
+from bot.utils.datetimes import fmt_local, now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,34 @@ class SheetsSync:
         sheet.clear()
         sheet.update(range_name="A1", values=all_values, value_input_option="RAW")
         return len(rows)
+
+    def sync_overview(self, totals: dict[str, int]) -> bool:
+        """Сводка с каноническими итогами (единая точка правды).
+
+        Значения здесь обязаны совпадать с числом строк в детальных листах:
+        «Уникальных пользователей» = строки в Users, «Всего участий» = строки в
+        Participants и т.д. Если что-то не сходится — это сразу видно тут.
+        """
+        if not self.spreadsheet:
+            return False
+
+        try:
+            headers = ["Показатель", "Значение"]
+            rows = [
+                ["Уникальных пользователей (= строк в Users)", totals.get("total_users", 0)],
+                ["Всего участий (= строк в Participants)", totals.get("total_participations", 0)],
+                ["Уникальных участников", totals.get("unique_participants", 0)],
+                ["Всего розыгрышей", totals.get("total_giveaways", 0)],
+                ["Всего победителей (= строк в Winners)", totals.get("total_winners", 0)],
+                ["Обновлено (МСК)", _fmt_dt(now_utc())],
+            ]
+            self._rewrite("Overview", headers, rows)
+            logger.info("Лист Overview обновлён")
+            return True
+
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации Overview: {e}", exc_info=True)
+            return False
 
     def sync_users(self, users: list[dict[str, Any]]) -> bool:
         """Синхронизация пользователей."""
@@ -183,7 +211,7 @@ class SheetsSync:
                 "Duration (days)",
                 "Total Participants",
                 "Winners Count",
-                "New Users",
+                "New Participants",
                 "Status",
                 "Created At (MSK)",
                 "Created By Admin",
@@ -223,7 +251,7 @@ class SheetsSync:
                         duration,
                         g.get("participants_count", 0),
                         g.get("winners_count", 0),
-                        g.get("new_users_count", 0),
+                        g.get("new_participants_count", 0),
                         status,
                         created_msk,
                         g.get("created_by_admin_id", ""),
@@ -315,8 +343,6 @@ async def sync_all_data() -> bool:
             ]
 
             # Розыгрыши со статистикой
-            from bot.db.models import User
-
             result = await session.execute(select(Giveaway))
             giveaways = result.scalars().all()
 
@@ -336,18 +362,27 @@ async def sync_all_data() -> bool:
                 ).all()
             )
 
+            # "Новые участники" — для скольких юзеров ЭТОТ розыгрыш стал первым.
+            # Каждый юзер считается ровно один раз (по самому раннему участию),
+            # поэтому сумма колонки = числу уникальных участников (без двойного счёта,
+            # в отличие от прежнего подсчёта «по окну дат»).
+            first_giveaway_subq = (
+                select(Participant.user_id, Participant.giveaway_id)
+                .order_by(Participant.user_id, Participant.joined_at.asc(), Participant.id.asc())
+                .distinct(Participant.user_id)  # PostgreSQL DISTINCT ON (user_id)
+                .subquery()
+            )
+            new_part_counts = dict(
+                (
+                    await session.execute(
+                        select(first_giveaway_subq.c.giveaway_id, func.count())
+                        .group_by(first_giveaway_subq.c.giveaway_id)
+                    )
+                ).all()
+            )
+
             giveaways_data = []
             for g in giveaways:
-                # Новые пользователи в окне розыгрыша зависят от диапазона дат — отдельный запрос.
-                new_users_count = await session.scalar(
-                    select(func.count()).select_from(User)
-                    .where(User.joined_at >= g.start_at)
-                    .where(User.joined_at <= g.end_at)
-                )
-
-                participants_count = part_counts.get(g.id, 0)
-                winners_count = win_counts.get(g.id, 0)
-
                 giveaways_data.append({
                     "id": g.id,
                     "description": g.description,
@@ -356,12 +391,23 @@ async def sync_all_data() -> bool:
                     "is_active": g.is_active,
                     "created_at": g.created_at,
                     "created_by_admin_id": g.created_by_admin_id,
-                    "participants_count": participants_count or 0,
-                    "winners_count": winners_count or 0,
-                    "new_users_count": new_users_count or 0,
+                    "participants_count": part_counts.get(g.id, 0) or 0,
+                    "winners_count": win_counts.get(g.id, 0) or 0,
+                    "new_participants_count": new_part_counts.get(g.id, 0) or 0,
                 })
 
+            # Канонические итоги для листа Overview (должны совпадать с числом
+            # строк в детальных листах — единая точка правды против путаницы).
+            overview = {
+                "total_users": len(users_data),
+                "total_participations": len(participants_data),
+                "unique_participants": sum(new_part_counts.values()),
+                "total_giveaways": len(giveaways),
+                "total_winners": len(winners_data),
+            }
+
         # Синхронизация (блокирующие вызовы gspread — в отдельном потоке)
+        await asyncio.to_thread(sync.sync_overview, overview)
         await asyncio.to_thread(sync.sync_users, users_data)
         await asyncio.to_thread(sync.sync_participants, participants_data)
         await asyncio.to_thread(sync.sync_winners, winners_data)
