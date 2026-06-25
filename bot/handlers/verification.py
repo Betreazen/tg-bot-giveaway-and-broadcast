@@ -13,7 +13,6 @@ from bot.db.repo import participant_repo
 from bot.handlers.admin.states import VerificationStates
 from bot.messages.i18n import t
 from bot.services.redis_client import get_redis
-from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -143,14 +142,10 @@ async def verification_callback(callback: CallbackQuery, state: FSMContext) -> N
 
             logger.info(f"User {user_id} passed verification for giveaway {giveaway_id}")
 
-            # Format end time for display
-            end_at_str = fmt_local(giveaway_end_dt, "%Y-%m-%d %H:%M")
-
             await callback.message.edit_text(
                 t(
                     "user.participation_confirmed",
                     description=giveaway_description,
-                    end_at=end_at_str,
                     num_winners=giveaway_num_winners,
                 )
             )

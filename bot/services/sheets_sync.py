@@ -56,38 +56,45 @@ class SheetsSync:
             logger.error(f"Ошибка подключения к Google Sheets: {e}", exc_info=True)
             return False
 
+    def _rewrite(self, title: str, headers: list[str], rows: list[list[Any]]) -> int:
+        """Полностью перезаписать лист одним запросом (без потери строк).
+
+        Раньше использовался clear()+append_rows, который при большом объёме мог
+        не дописать часть строк. Здесь грид сначала растягивается под объём данных,
+        затем все значения пишутся одним update — строки не теряются.
+        """
+        all_values = [headers, *rows]
+        needed_rows = len(all_values) + 10
+        cols = max(len(headers), 1)
+
+        try:
+            sheet = self.spreadsheet.worksheet(title)
+        except gspread.exceptions.WorksheetNotFound:
+            sheet = self.spreadsheet.add_worksheet(title=title, rows=needed_rows, cols=cols)
+
+        # Грид должен вмещать все строки/столбцы до записи.
+        if sheet.row_count < needed_rows:
+            sheet.add_rows(needed_rows - sheet.row_count)
+        if sheet.col_count < cols:
+            sheet.add_cols(cols - sheet.col_count)
+
+        sheet.clear()
+        sheet.update(range_name="A1", values=all_values, value_input_option="RAW")
+        return len(rows)
+
     def sync_users(self, users: list[dict[str, Any]]) -> bool:
         """Синхронизация пользователей."""
         if not self.spreadsheet:
             return False
 
         try:
-            # Получаем или создаем лист Users
-            try:
-                sheet = self.spreadsheet.worksheet("Users")
-                sheet.clear()
-            except gspread.exceptions.WorksheetNotFound:
-                sheet = self.spreadsheet.add_worksheet(title="Users", rows=1000, cols=10)
-
-            # Заголовки
             headers = ["User ID", "Username", "Joined At (MSK)"]
-            sheet.append_row(headers)
-
-            # Данные
-            rows = []
-            for user in users:
-                rows.append(
-                    [
-                        user.get("user_id", ""),
-                        user.get("username", ""),
-                        _fmt_dt(user.get("joined_at")),
-                    ]
-                )
-
-            if rows:
-                sheet.append_rows(rows)
-
-            logger.info(f"Синхронизировано пользователей: {len(rows)}")
+            rows = [
+                [user.get("user_id", ""), user.get("username", ""), _fmt_dt(user.get("joined_at"))]
+                for user in users
+            ]
+            count = self._rewrite("Users", headers, rows)
+            logger.info(f"Синхронизировано пользователей: {count}")
             return True
 
         except Exception as e:
@@ -100,12 +107,6 @@ class SheetsSync:
             return False
 
         try:
-            try:
-                sheet = self.spreadsheet.worksheet("Participants")
-                sheet.clear()
-            except gspread.exceptions.WorksheetNotFound:
-                sheet = self.spreadsheet.add_worksheet(title="Participants", rows=1000, cols=10)
-
             headers = [
                 "Giveaway ID",
                 "User ID",
@@ -114,25 +115,19 @@ class SheetsSync:
                 "Giveaway Start (MSK)",
                 "Giveaway End (MSK)",
             ]
-            sheet.append_row(headers)
-
-            rows = []
-            for p in participants:
-                rows.append(
-                    [
-                        p.get("giveaway_id", ""),
-                        p.get("user_id", ""),
-                        p.get("username_snapshot", ""),
-                        _fmt_dt(p.get("joined_at")),
-                        _fmt_dt(p.get("giveaway_start")),
-                        _fmt_dt(p.get("giveaway_end")),
-                    ]
-                )
-
-            if rows:
-                sheet.append_rows(rows)
-
-            logger.info(f"Синхронизировано участников: {len(rows)}")
+            rows = [
+                [
+                    p.get("giveaway_id", ""),
+                    p.get("user_id", ""),
+                    p.get("username_snapshot", ""),
+                    _fmt_dt(p.get("joined_at")),
+                    _fmt_dt(p.get("giveaway_start")),
+                    _fmt_dt(p.get("giveaway_end")),
+                ]
+                for p in participants
+            ]
+            count = self._rewrite("Participants", headers, rows)
+            logger.info(f"Синхронизировано участников: {count}")
             return True
 
         except Exception as e:
@@ -145,30 +140,18 @@ class SheetsSync:
             return False
 
         try:
-            try:
-                sheet = self.spreadsheet.worksheet("Winners")
-                sheet.clear()
-            except gspread.exceptions.WorksheetNotFound:
-                sheet = self.spreadsheet.add_worksheet(title="Winners", rows=1000, cols=10)
-
             headers = ["Giveaway ID", "User ID", "Username", "Selected At (MSK)"]
-            sheet.append_row(headers)
-
-            rows = []
-            for w in winners:
-                rows.append(
-                    [
-                        w.get("giveaway_id", ""),
-                        w.get("user_id", ""),
-                        w.get("username_snapshot", ""),
-                        _fmt_dt(w.get("created_at")),
-                    ]
-                )
-
-            if rows:
-                sheet.append_rows(rows)
-
-            logger.info(f"Синхронизировано победителей: {len(rows)}")
+            rows = [
+                [
+                    w.get("giveaway_id", ""),
+                    w.get("user_id", ""),
+                    w.get("username_snapshot", ""),
+                    _fmt_dt(w.get("created_at")),
+                ]
+                for w in winners
+            ]
+            count = self._rewrite("Winners", headers, rows)
+            logger.info(f"Синхронизировано победителей: {count}")
             return True
 
         except Exception as e:
@@ -192,12 +175,6 @@ class SheetsSync:
             return False
 
         try:
-            try:
-                sheet = self.spreadsheet.worksheet("Giveaways Summary")
-                sheet.clear()
-            except gspread.exceptions.WorksheetNotFound:
-                sheet = self.spreadsheet.add_worksheet(title="Giveaways Summary", rows=1000, cols=15)
-
             headers = [
                 "ID",
                 "Description",
@@ -211,7 +188,6 @@ class SheetsSync:
                 "Created At (MSK)",
                 "Created By Admin",
             ]
-            sheet.append_row(headers)
 
             rows = []
 
@@ -254,10 +230,8 @@ class SheetsSync:
                     ]
                 )
 
-            if rows:
-                sheet.append_rows(rows)
-
-            logger.info(f"Синхронизировано розыгрышей в сводную таблицу: {len(rows)}")
+            count = self._rewrite("Giveaways Summary", headers, rows)
+            logger.info(f"Синхронизировано розыгрышей в сводную таблицу: {count}")
             return True
 
         except Exception as e:

@@ -82,9 +82,6 @@ async def handle_manual_announce(callback: CallbackQuery) -> None:
                 await callback.message.edit_text("❌ Активный розыгрыш не найден")
                 return
 
-            # Форматируем дату окончания
-            end_at_str = fmt_local(giveaway.end_at)
-
             # Создаем кнопку участия
             join_button = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -100,8 +97,7 @@ async def handle_manual_announce(callback: CallbackQuery) -> None:
             announce_text = (
                 f"🎉 <b>Новый розыгрыш!</b>\n\n"
                 f"{giveaway.description}\n\n"
-                f"🏆 Победителей: {giveaway.num_winners}\n"
-                f"⏰ До: {end_at_str} МСК\n\n"
+                f"🏆 Победителей: {giveaway.num_winners}\n\n"
                 f"👉 Нажми кнопку ниже для участия!"
             )
 

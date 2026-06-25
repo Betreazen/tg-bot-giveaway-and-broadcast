@@ -23,7 +23,6 @@ from bot.handlers.verification import (
 from bot.messages.i18n import t
 from bot.services.redis_client import get_redis
 from bot.services.subscription import check_subscription
-from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -95,16 +94,19 @@ async def start_handler(message: Message, state: FSMContext) -> None:
                 )
                 logger.info(f"Admin {user_id} joined giveaway {giveaway.id} (verification skipped)")
 
-                end_at_str = fmt_local(giveaway.end_at, "%Y-%m-%d %H:%M")
-
                 await message.answer(
                     t(
                         "user.participation_confirmed",
                         description=giveaway.description,
-                        end_at=end_at_str,
                         num_winners=giveaway.num_winners,
                     )
                 )
+                return
+
+            # Require a public @username to participate (needed to contact winners)
+            if not username:
+                await message.answer(t("user.no_username"))
+                logger.info(f"User {user_id} has no username — participation blocked")
                 return
 
             # Check if user is blocked for this giveaway

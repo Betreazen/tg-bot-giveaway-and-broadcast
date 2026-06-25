@@ -14,7 +14,6 @@ from bot.keyboards.admin import get_announce_target_keyboard, get_preview_keyboa
 from bot.keyboards.common import get_navigation_keyboard
 from bot.messages.i18n import t
 from bot.services.mailing import MessageContent, send_mass_message, send_to_channel
-from bot.utils.datetimes import fmt_local
 
 logger = logging.getLogger(__name__)
 
@@ -267,9 +266,6 @@ async def handle_announce_target(callback: CallbackQuery, state: FSMContext) -> 
                 await state.clear()
                 return
 
-            # Форматируем дату окончания
-            end_at_str = fmt_local(giveaway.end_at)
-
             # Создаем кнопку участия
             join_button = InlineKeyboardMarkup(
                 inline_keyboard=[[
@@ -280,8 +276,7 @@ async def handle_announce_target(callback: CallbackQuery, state: FSMContext) -> 
             announce_text = (
                 f"🎉 <b>Новый розыгрыш!</b>\n\n"
                 f"{giveaway.description}\n\n"
-                f"🏆 Победителей: {giveaway.num_winners}\n"
-                f"⏰ До: {end_at_str} МСК\n\n"
+                f"🏆 Победителей: {giveaway.num_winners}\n\n"
                 f"👉 Нажми кнопку ниже для участия!"
             )
 

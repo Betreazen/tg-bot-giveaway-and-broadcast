@@ -171,7 +171,8 @@ async def publish_results(callback: CallbackQuery, state: FSMContext) -> None:
                 f"🏆 <b>Результаты розыгрыша!</b>\n\n"
                 f"📝 {giveaway.description}\n\n"
                 f"<b>Победители:</b>\n{winners_text}\n\n"
-                f"Поздравляем! 🎊"
+                f"Поздравляем! 🎊\n\n"
+                f"📞 С победителями свяжутся в течение суток после объявления результатов."
             )
 
             # Список получателей собираем внутри сессии, рассылку делаем вне её.
