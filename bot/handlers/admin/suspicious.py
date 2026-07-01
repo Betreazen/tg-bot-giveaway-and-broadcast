@@ -46,6 +46,51 @@ async def suspicious_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+def _paginate(header: str, lines: list[str], limit: int = 3800) -> list[str]:
+    """Split a header + list of lines into messages under Telegram's length limit."""
+    pages: list[str] = []
+    current = header
+    for line in lines:
+        if len(current) + len(line) + 1 > limit:
+            pages.append(current.rstrip())
+            current = ""
+        current += line + "\n"
+    if current.strip():
+        pages.append(current.rstrip())
+    return pages or [header.rstrip()]
+
+
+@router.callback_query(F.data == "suspicious:list")
+async def list_suspicious(callback: CallbackQuery, state: FSMContext) -> None:
+    """Показать список всех подозрительных аккаунтов."""
+    if not callback.message:
+        return
+    await state.clear()
+
+    async with get_session() as session:
+        users = await user_repo.get_suspicious_users(session)
+
+    if not users:
+        await callback.message.edit_text(
+            "📋 Список подозрительных пуст.", reply_markup=get_suspicious_menu_keyboard()
+        )
+        await callback.answer()
+        return
+
+    lines = [
+        f"{i}. {'@' + u.username if u.username else 'без username'} "
+        f"(ID <code>{u.user_id}</code>)"
+        for i, u in enumerate(users, 1)
+    ]
+    pages = _paginate(f"📋 <b>Подозрительные аккаунты ({len(users)})</b>\n\n", lines)
+
+    # First page replaces the menu message (with the menu keyboard), rest as follow-ups.
+    await callback.message.edit_text(pages[0], reply_markup=get_suspicious_menu_keyboard())
+    for page in pages[1:]:
+        await callback.message.answer(page)
+    await callback.answer()
+
+
 @router.callback_query(F.data == "suspicious:mark")
 async def prompt_mark(callback: CallbackQuery, state: FSMContext) -> None:
     """Запросить username для пометки."""

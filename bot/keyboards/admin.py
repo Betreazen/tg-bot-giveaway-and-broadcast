@@ -53,6 +53,7 @@ def get_suspicious_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🚩 Пометить подозрительным", callback_data="suspicious:mark")],
             [InlineKeyboardButton(text="✅ Снять метку", callback_data="suspicious:unmark")],
+            [InlineKeyboardButton(text="📋 Список подозрительных", callback_data="suspicious:list")],
             [InlineKeyboardButton(text=t("buttons.main_menu"), callback_data="nav:main_menu")],
         ]
     )

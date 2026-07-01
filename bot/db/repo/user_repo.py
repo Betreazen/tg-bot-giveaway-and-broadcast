@@ -101,6 +101,22 @@ async def set_suspicious(session: AsyncSession, username: str, is_suspicious: bo
     return user
 
 
+async def get_suspicious_users(session: AsyncSession) -> list[User]:
+    """
+    Return all users currently flagged suspicious, ordered by username.
+
+    Args:
+        session: Database session
+
+    Returns:
+        List of suspicious User objects.
+    """
+    result = await session.execute(
+        select(User).where(User.is_suspicious.is_(True)).order_by(User.username, User.user_id)
+    )
+    return list(result.scalars().all())
+
+
 async def get_suspicious_user_ids(session: AsyncSession, user_ids: list[int]) -> set[int]:
     """
     Return the subset of ``user_ids`` that are flagged suspicious.
