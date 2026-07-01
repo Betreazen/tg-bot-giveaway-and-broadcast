@@ -19,6 +19,7 @@ def get_admin_main_menu(has_active_giveaway: bool = False) -> InlineKeyboardMark
         [InlineKeyboardButton(text=t("buttons.create_giveaway"), callback_data="admin:create_giveaway")],
         [InlineKeyboardButton(text=t("buttons.broadcast"), callback_data="admin:broadcast")],
         [InlineKeyboardButton(text=t("buttons.view_status"), callback_data="admin:status")],
+        [InlineKeyboardButton(text="🚩 Подозрительные аккаунты", callback_data="admin:suspicious")],
         [InlineKeyboardButton(text="📊 Синхронизация Google Sheets", callback_data="admin:sync_sheets")],
     ]
 
@@ -44,6 +45,17 @@ def get_admin_main_menu(has_active_giveaway: bool = False) -> InlineKeyboardMark
     keyboard.append([InlineKeyboardButton(text=t("buttons.close"), callback_data="admin:close")])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_suspicious_menu_keyboard() -> InlineKeyboardMarkup:
+    """Menu for managing suspicious accounts."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚩 Пометить подозрительным", callback_data="suspicious:mark")],
+            [InlineKeyboardButton(text="✅ Снять метку", callback_data="suspicious:unmark")],
+            [InlineKeyboardButton(text=t("buttons.main_menu"), callback_data="nav:main_menu")],
+        ]
+    )
 
 
 def get_announce_target_keyboard() -> InlineKeyboardMarkup:

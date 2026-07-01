@@ -82,7 +82,15 @@ async def main() -> None:
         # Register handlers
         logger.info("Registering handlers...")
         from bot.handlers import start, verification
-        from bot.handlers.admin import announce, broadcast_wizard, entry, giveaway_wizard, menu, winners
+        from bot.handlers.admin import (
+            announce,
+            broadcast_wizard,
+            entry,
+            giveaway_wizard,
+            menu,
+            suspicious,
+            winners,
+        )
         from bot.middlewares.admin import AdminOnlyMiddleware
 
         # Admin routers are gated by a single middleware (defense-in-depth).
@@ -91,6 +99,7 @@ async def main() -> None:
             announce.router,
             winners.router,
             broadcast_wizard.router,
+            suspicious.router,
             menu.router,
             entry.router,
         ]

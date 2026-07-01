@@ -24,6 +24,10 @@ class User(Base):
     joined_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
+    # Admin-marked suspicious accounts may participate but never win. Silent to the user.
+    is_suspicious: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     __table_args__ = (Index("ix_users_joined_at", "joined_at"),)
 

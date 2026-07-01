@@ -98,6 +98,7 @@ class SheetsSync:
                 ["Уникальных пользователей (= строк в Users)", totals.get("total_users", 0)],
                 ["Всего участий (= строк в Participants)", totals.get("total_participations", 0)],
                 ["Уникальных участников", totals.get("unique_participants", 0)],
+                ["Подозрительных аккаунтов", totals.get("suspicious_users", 0)],
                 ["Всего розыгрышей", totals.get("total_giveaways", 0)],
                 ["Всего победителей (= строк в Winners)", totals.get("total_winners", 0)],
                 ["Обновлено (МСК)", _fmt_dt(now_utc())],
@@ -116,9 +117,14 @@ class SheetsSync:
             return False
 
         try:
-            headers = ["User ID", "Username", "Joined At (MSK)"]
+            headers = ["User ID", "Username", "Joined At (MSK)", "Suspicious"]
             rows = [
-                [user.get("user_id", ""), user.get("username", ""), _fmt_dt(user.get("joined_at"))]
+                [
+                    user.get("user_id", ""),
+                    user.get("username", ""),
+                    _fmt_dt(user.get("joined_at")),
+                    "Да" if user.get("is_suspicious") else "",
+                ]
                 for user in users
             ]
             count = self._rewrite("Users", headers, rows)
@@ -300,7 +306,15 @@ async def sync_all_data() -> bool:
         async with get_session() as session:
             # Пользователи
             users = await user_repo.get_all_users(session)
-            users_data = [{"user_id": u.user_id, "username": u.username, "joined_at": u.joined_at} for u in users]
+            users_data = [
+                {
+                    "user_id": u.user_id,
+                    "username": u.username,
+                    "joined_at": u.joined_at,
+                    "is_suspicious": u.is_suspicious,
+                }
+                for u in users
+            ]
 
             # Участники с датами розыгрышей
             from sqlalchemy import func, select
@@ -402,6 +416,7 @@ async def sync_all_data() -> bool:
                 "total_users": len(users_data),
                 "total_participations": len(participants_data),
                 "unique_participants": sum(new_part_counts.values()),
+                "suspicious_users": sum(1 for u in users_data if u.get("is_suspicious")),
                 "total_giveaways": len(giveaways),
                 "total_winners": len(winners_data),
             }

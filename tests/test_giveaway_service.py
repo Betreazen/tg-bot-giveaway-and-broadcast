@@ -14,6 +14,12 @@ from bot.services.giveaway_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_suspicious(monkeypatch):
+    # By default no participant is suspicious; individual tests can override.
+    monkeypatch.setattr(gs.user_repo, "get_suspicious_user_ids", AsyncMock(return_value=set()))
+
+
 def _participants(n: int):
     return [SimpleNamespace(user_id=i, username_snapshot=f"user{i}") for i in range(n)]
 
@@ -83,6 +89,43 @@ async def test_select_winners_uses_ended_at_snapshot(monkeypatch):
 @pytest.mark.asyncio
 async def test_select_winners_no_participants_raises(monkeypatch):
     monkeypatch.setattr(gs.participant_repo, "get_participants", AsyncMock(return_value=[]))
+    with pytest.raises(NoParticipantsError):
+        await select_winners(session=None, giveaway=_giveaway(1))
+
+
+@pytest.mark.asyncio
+async def test_suspicious_participants_never_win(monkeypatch):
+    # 10 participants (ids 0..9); mark half suspicious — they must never appear.
+    monkeypatch.setattr(
+        gs.participant_repo, "get_participants", AsyncMock(return_value=_participants(10))
+    )
+    suspicious = {0, 1, 2, 3, 4}
+    monkeypatch.setattr(
+        gs.user_repo, "get_suspicious_user_ids", AsyncMock(return_value=suspicious)
+    )
+    captured = {}
+
+    async def fake_add_winners(**kwargs):
+        captured.update(kwargs)
+        return [object() for _ in kwargs["user_ids"]]
+
+    monkeypatch.setattr(gs.winner_repo, "add_winners", AsyncMock(side_effect=fake_add_winners))
+
+    # Draw many times: a suspicious id must NEVER be selected.
+    for _ in range(50):
+        await select_winners(session=None, giveaway=_giveaway(3))
+        assert set(captured["user_ids"]).isdisjoint(suspicious)
+        assert len(captured["user_ids"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_all_suspicious_raises(monkeypatch):
+    monkeypatch.setattr(
+        gs.participant_repo, "get_participants", AsyncMock(return_value=_participants(3))
+    )
+    monkeypatch.setattr(
+        gs.user_repo, "get_suspicious_user_ids", AsyncMock(return_value={0, 1, 2})
+    )
     with pytest.raises(NoParticipantsError):
         await select_winners(session=None, giveaway=_giveaway(1))
 

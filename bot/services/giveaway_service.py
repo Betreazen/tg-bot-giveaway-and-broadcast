@@ -6,7 +6,7 @@ import random
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Giveaway, Participant, Winner
-from bot.db.repo import participant_repo, winner_repo
+from bot.db.repo import participant_repo, user_repo, winner_repo
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,28 @@ async def select_winners(session: AsyncSession, giveaway: Giveaway) -> list[Winn
     if not participants:
         raise NoParticipantsError(f"No participants in giveaway {giveaway.id}")
 
-    # Determine number of winners
-    num_winners = min(giveaway.num_winners, len(participants))
+    # Suspicious accounts may participate but must NEVER win — remove them from
+    # the winner pool. The draw itself stays fully random over the legitimate
+    # participants (equivalent to re-drawing until no suspicious accounts remain).
+    suspicious_ids = await user_repo.get_suspicious_user_ids(
+        session, [p.user_id for p in participants]
+    )
+    legit_participants = [p for p in participants if p.user_id not in suspicious_ids]
 
-    # Randomly select winners
-    selected_participants: list[Participant] = random.sample(participants, num_winners)
+    if not legit_participants:
+        raise NoParticipantsError(
+            f"No legitimate (non-suspicious) participants in giveaway {giveaway.id}"
+        )
+
+    # Determine number of winners
+    num_winners = min(giveaway.num_winners, len(legit_participants))
+
+    # Randomly select winners from legitimate participants only
+    selected_participants: list[Participant] = random.sample(legit_participants, num_winners)
 
     logger.info(
-        f"Selected {num_winners} winners from {len(participants)} participants for giveaway {giveaway.id}"
+        f"Selected {num_winners} winners from {len(legit_participants)} legitimate "
+        f"participants ({len(suspicious_ids)} suspicious excluded) for giveaway {giveaway.id}"
     )
 
     # Prepare winner data

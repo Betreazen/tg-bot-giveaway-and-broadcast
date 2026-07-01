@@ -80,6 +80,46 @@ async def get_all_user_ids(session: AsyncSession) -> list[int]:
     return list(result.scalars().all())
 
 
+async def set_suspicious(session: AsyncSession, username: str, is_suspicious: bool) -> User | None:
+    """
+    Mark/unmark a user (found by username, case-insensitive) as suspicious.
+
+    Args:
+        session: Database session
+        username: Bare username (no @), already normalised to lowercase
+        is_suspicious: True to flag, False to clear
+
+    Returns:
+        The updated User, or None if no user with that username exists.
+    """
+    result = await session.execute(select(User).where(func.lower(User.username) == username.lower()))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return None
+    user.is_suspicious = is_suspicious
+    await session.flush()
+    return user
+
+
+async def get_suspicious_user_ids(session: AsyncSession, user_ids: list[int]) -> set[int]:
+    """
+    Return the subset of ``user_ids`` that are flagged suspicious.
+
+    Args:
+        session: Database session
+        user_ids: Candidate user IDs to check
+
+    Returns:
+        Set of user IDs that are marked suspicious.
+    """
+    if not user_ids:
+        return set()
+    result = await session.execute(
+        select(User.user_id).where(User.user_id.in_(user_ids), User.is_suspicious.is_(True))
+    )
+    return set(result.scalars().all())
+
+
 async def get_user_count(session: AsyncSession) -> int:
     """
     Get total number of users.

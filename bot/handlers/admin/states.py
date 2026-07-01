@@ -46,3 +46,10 @@ class VerificationStates(StatesGroup):
     """Состояния верификации пользователя при регистрации в розыгрыше."""
 
     waiting_for_button = State()
+
+
+class SuspiciousStates(StatesGroup):
+    """Состояния управления подозрительными аккаунтами."""
+
+    enter_username_to_mark = State()
+    enter_username_to_unmark = State()
