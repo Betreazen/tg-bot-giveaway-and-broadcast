@@ -11,6 +11,13 @@
 
 services:
   postgres:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Меньше памяти под кэш страниц: у бота база крошечная.
+    command: postgres -c shared_buffers=32MB -c work_mem=2MB
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -29,6 +36,11 @@ services:
     mem_limit: 256m
 
   redis:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes:
@@ -44,6 +56,14 @@ services:
     mem_limit: 128m
 
   bot:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      # glibc резервирует память про запас на каждый поток Python; 2 арены заметно снижают аппетит.
+      MALLOC_ARENA_MAX: "2"
     build: .
     depends_on:
       postgres:
@@ -58,7 +78,7 @@ services:
       # (and set GOOGLE_CREDENTIALS_PATH=/app/service_account.json in .env):
       # - ./service_account.json:/app/service_account.json:ro
     restart: unless-stopped
-    mem_limit: 256m
+    mem_limit: 400m
 
 volumes:
   postgres_data:
