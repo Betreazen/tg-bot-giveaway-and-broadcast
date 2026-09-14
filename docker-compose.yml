@@ -34,6 +34,7 @@ services:
       retries: 5
     restart: unless-stopped
     mem_limit: 256m
+    memswap_limit: 512m
 
   redis:
     logging:
@@ -54,6 +55,7 @@ services:
       retries: 5
     restart: unless-stopped
     mem_limit: 128m
+    memswap_limit: 256m
 
   bot:
     logging:
@@ -79,6 +81,7 @@ services:
       # - ./service_account.json:/app/service_account.json:ro
     restart: unless-stopped
     mem_limit: 400m
+    memswap_limit: 800m
 
 volumes:
   postgres_data:
