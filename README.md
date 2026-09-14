@@ -262,3 +262,7 @@ MIT License - см. файл [LICENSE](LICENSE)
 ## ✨ Автор
 
 Создано для проведения честных и прозрачных розыгрышей в Telegram.
+
+## Operations
+
+See [deployment, resource limits and rollback](OPERATIONS.md).

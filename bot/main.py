@@ -58,7 +58,7 @@ async def main() -> None:
 
         # Initialize Redis storage for FSM.
         # A per-bot key prefix keeps FSM keys isolated when several bots share one Redis.
-        logger.info(f"Connecting to Redis: {settings.redis_url}")
+        logger.info("Connecting to Redis")
         redis = Redis.from_url(settings.redis_url, decode_responses=True)
         init_redis(redis)
         storage = RedisStorage(
